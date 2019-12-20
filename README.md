@@ -69,3 +69,11 @@ The contents of that the hyperparameter dictionary expects are detailed below:
 | `epochs` | `<int> (100)`  | The number of epochs used when training. |
 
 ### Understanding the structure of the repository
+
+* `Models`: contains the training functions (`train_vae.py`) and the neural network architectures (`VAENet.py`).
+* `Utils`: Besides general utils, it contains all the distributions (`Distributions.py`) and data loading routines (`load_data.py`)
+* `vae_experiments`: Contains all the scripts to run the VAE experiments to replicate the paper results.
+* `structure_output_prediction`: Contains all the scripts to run the SOP experiments.
+* `Tests`: Contains various tests for relevant classes in the repo. The name indicates which class is being tested.
+
+
