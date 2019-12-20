@@ -4,7 +4,7 @@
 
 * For inquiries: apotapczynski@gmail.com 
 
-This repo contains a TensorFlow 2.0 implementation of the Invertible Gaussian Reparameterization.
+This repo contains a TensorFlow 2.0 implementation of the Invertible Gaussian Reparameterization.<br>
 
 **Abstract**<br>
 *The Gumbel-Softmax is a continuous distribution over the simplex that is often used as a relaxation
@@ -25,7 +25,7 @@ This repo contains a TensorFlow 2.0 implementation of the Invertible Gaussian Re
 ## Overview
 
 The goal of this documentation is to provide a guide to replicate the results from the paper and to clarify the structure
-of the repository.
+of the repo.
 
 ### Replicating the results
 
@@ -42,20 +42,19 @@ The contents of that the hyperparameter dictionary expects are detailed below:
 
 | Key                               | Value (Example)                            | Description     |
 | :-------------------------------- | :------------------------------: | :-----------------------: |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `model_type` | `<str> ('ExpGSDis')`  | The name of the model to use. |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `sample_size`  | `<int> (1)`  | The number of samples that are taken from the noise distribution at each iteration |
-| `n_required` | `<int> ('10')`  | The number of categories needed for each discrete variable |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
-| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model |
+| `dataset_name` | `<str> ('mnist')`  | The name of the dataset to run the model. |
+| `model_type` | `<str> ('ExpGSDis')`  | The name of the model to use. Look at `./Models/train_vae.py`  for all the model options. |
+| `temp` | `<float> (0.25)`  | The value of the temperature hyperparameter.|
+| `sample_size`  | `<int> (1)`  | The number of samples that are taken from the noise distribution at each iteration. |
+| `n_required` | `<int> ('10')`  | The number of categories needed for each discrete variable. |
+| `num_of_discrete_param` | `<int> (1)`  | The number of parameters for the discrete variables. |
+| `num_of_discrete_var` | `<int> (2)`  | The number of discrete variables in the model. |
+| `num_of_norm_param` | `<int> (0)`  | The number of parameters for the continuous variables. If the value is 0 then no continuous variable is incorporated into the model. |
+| `num_of_norm_var` | `<int> (0)`  | The number of continuous variables in the model. |
+| `latent_norm_n` | `<int> (0)`  | The dimensionality of the continuous variables in the model. |
+| `architecture` | `<str> ('dense')`  | The neural network architecture employed. All the options are in `./Models/VAENet.py`.|
+| `learning_rate` | `<float> (0.001)`  | The learning rate used when training. |
+| `batch_n` | `<int> (64)`  | The batch size taken per iteration. |
+| `epochs` | `<int> (100)`  | The number of epochs used when training. |
 
 ### Understanding the structure of the repository
