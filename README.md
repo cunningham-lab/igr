@@ -27,6 +27,17 @@ This repo contains a TensorFlow 2.0 implementation of the Invertible Gaussian Re
 The goal of this documentation is to provide a guide to replicate the results from the paper and to clarify the structure
 of the repo.
 
+### Requirements
+Below is a list of the main requirements. Installing them via `pip` will fetch the dependencies as well.
+```
+numba==0.46.0
+plotly==4.2.1
+scipy==1.3.1
+seaborn==0.9.0
+tensorflow==2.0.0
+tensorflow-datasets==1.3.0
+```
+
 ### Replicating the results
 
 The scripts to replicate the experiments of the paper are under the `vae_experiments` folder. For example, to replicate the
