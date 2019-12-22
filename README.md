@@ -1,8 +1,8 @@
 # Invertible Gaussian Reparameterization: Revisting the Gumbel-Softmax
-**Andres Potapczynski**, **Gabriel Loaiza-Ganem** and **John P. Cunningham** 
+**Andres Potapczynski**, **Gabriel Loaiza-Ganem** and **John P. Cunningham**
 [(webpage)](http://stat.columbia.edu/~cunningham/). <br>
 
-* For inquiries: apotapczynski@gmail.com 
+* For inquiries: apotapczynski@gmail.com
 
 This repo contains a TensorFlow 2.0 implementation of the Invertible Gaussian Reparameterization.<br>
 
@@ -76,4 +76,16 @@ The contents of that the hyperparameter dictionary expects are detailed below:
 * `structure_output_prediction`: Contains all the scripts to run the SOP experiments.
 * `Tests`: Contains various tests for relevant classes in the repo. The name indicates which class is being tested.
 
+### Implementation Nuances
 
+The IGR-SB extends the reparameterization trick to distributions with an countably infinite
+support. However, to implement the IGR-SB with finite resources, there is a threshold imposed on the
+stick breaking procedure that determines a finite number of categories that are needed for a proper
+estimation. Additionally, in our current implementation, the number of categories has a maximum that is set as a
+reference (this is called `latent_discrete_n` in the `hyper` dictionary). This maximum can be moved
+accordingly to fit the problem. For example, for CelebA we set a maximum number of categories to 50
+but the thresholding procedure ended up selecting 20-30. Moving the maximum beyond 50 would have
+resulted in waste of memory allocated but would have not yield any quantitive difference. However,
+setting the maximum to 10 would have truncated the stick-breaking procedure too soon and would have
+resulted in a loss of performance. To avoid this situation, we recommend monitoring if the threshold
+is met. If not, then increasing the maximum would be needed.
