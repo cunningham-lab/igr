@@ -1,4 +1,4 @@
-# Invertible Gaussian Reparameterization: Revisting the Gumbel-Softmax
+# [Invertible Gaussian Reparameterization: Revisting the Gumbel-Softmax](https://arxiv.org/abs/1912.09588)
 **Andres Potapczynski**, **Gabriel Loaiza-Ganem** and **John P. Cunningham**
 [(webpage)](http://stat.columbia.edu/~cunningham/). <br>
 
