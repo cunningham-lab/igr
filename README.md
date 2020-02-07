@@ -7,20 +7,16 @@
 This repo contains a TensorFlow 2.0 implementation of the Invertible Gaussian Reparameterization.<br>
 
 **Abstract**<br>
-*The Gumbel-Softmax is a continuous distribution over the simplex that is often used as a relaxation
- of discrete distributions. Because it can be readily interpreted and easily reparameterized, the
- Gumbel-Softmax enjoys widespread use. We show that this relaxation experiences two shortcomings
- that affect its performance, namely: numerical instability caused by its temperature hyperparameter
- and noisy KL estimates. The first requires the temperature values to be set too high,
- creating a poor correspondence between continuous components and their respective discrete
- complements. The second, which is of fundamental importance to variational autoencoders, severely
- hurts performance. We propose a flexible and reparameterizable family of distributions that
- circumvents these issues by transforming Gaussian noise into one-hot approximations through an
- invertible function. Our construction improves numerical stability, and outperforms the
- Gumbel-Softmax in a variety of experiments while generating samples that are closer to their
- discrete counterparts and achieving lower-variance gradients. Furthermore, with a careful choice of the
- invertible function we extend the reparameterization trick to distributions with countably infinite
- support.*
+*The Gumbel-Softmax is a continuous distribution over the simplex that is often used as a relaxation of discrete 
+distributions. Because it can be readily interpreted and easily reparameterized, it enjoys widespread use. Unfortunately, we 
+show that the cost of this aesthetic interpretability is material: the temperature hyperparameter must be set too high, KL 
+estimates are noisy, and as a result, performance suffers. We circumvent the previous issues by proposing a much simpler and 
+more flexible reparameterizable family of distributions that transforms Gaussian noise into a one-hot approximation through an 
+invertible function. This invertible function is composed of a modified softmax and can incorporate diverse transformations 
+that serve different specific purposes. For example, the stick-breaking procedure allows us to extend the reparameterization 
+trick to distributions with countably infinite support, or normalizing flows let us increase the flexibility of the 
+distribution. Our construction improves numerical stability and outperforms the Gumbel-Softmax in a variety of experiments 
+while generating samples that are closer to their discrete counterparts and achieving lower-variance gradients.*
 
 ## Overview
 
@@ -28,9 +24,10 @@ The goal of this documentation is to provide a guide to replicate the results fr
 of the repo.
 
 ### Requirements
-Below is a list of the main requirements. Installing them via `pip` will fetch the dependencies as well.
+Below is a list of the main requirements. Installing them via `pip` will fetch the dependencies as well. The most relevant requirement are for the Tensorflow APIs. 
 ```
 numba==0.46.0
+pandas==0.25.2
 plotly==4.2.1
 scipy==1.3.1
 seaborn==0.9.0
@@ -58,7 +55,7 @@ The contents of that the hyperparameter dictionary expects are detailed below:
 | `temp` | `<float> (0.25)`  | The value of the temperature hyperparameter.|
 | `sample_size`  | `<int> (1)`  | The number of samples that are taken from the noise distribution at each iteration. |
 | `n_required` | `<int> ('10')`  | The number of categories needed for each discrete variable. |
-| `num_of_discrete_param` | `<int> (1)`  | The number of parameters for the discrete variables. |
+| `num_of_discrete_param` | `<int> (1)`  | The number of parameters for the discrete variables (Remember that the IGR requires one less). |
 | `num_of_discrete_var` | `<int> (2)`  | The number of discrete variables in the model. |
 | `num_of_norm_param` | `<int> (0)`  | The number of parameters for the continuous variables. If the value is 0 then no continuous variable is incorporated into the model. |
 | `num_of_norm_var` | `<int> (0)`  | The number of continuous variables in the model. |
@@ -67,6 +64,11 @@ The contents of that the hyperparameter dictionary expects are detailed below:
 | `learning_rate` | `<float> (0.001)`  | The learning rate used when training. |
 | `batch_n` | `<int> (64)`  | The batch size taken per iteration. |
 | `epochs` | `<int> (100)`  | The number of epochs used when training. |
+| `run_jv` | `<bool> (False)`  | Whether to run the JointVAE model or not. |
+| `gamma` | `<int> (100)`  | The number of epochs used when training. |
+| `cont_c_linspace` | `<tuple> ((0., 5., 25000))`  | The lower bound, upper bound, and how many iters to get from lower to upper. |
+| `disc_c_linspace` | `<tuple> ((0., 5., 25000))`  | The lower bound, upper bound, and how many iters to get from lower to upper. |
+| `check_every` | `<int> (1)`  | How often (in terms of epochs) the test loss is evaluated. |
 
 ### Understanding the structure of the repository
 
@@ -81,7 +83,7 @@ The contents of that the hyperparameter dictionary expects are detailed below:
 The IGR-SB extends the reparameterization trick to distributions with an countably infinite
 support. However, to implement the IGR-SB with finite resources, there is a threshold imposed on the
 stick breaking procedure that determines a finite number of categories that are needed for a proper
-estimation. Additionally, in our current implementation, the number of categories has a maximum that is set as a
+estimation. Additionally, the number of categories has a maximum that is set as a
 reference (this is called `latent_discrete_n` in the `hyper` dictionary). This maximum can be moved
 accordingly to fit the problem. For example, for CelebA we set a maximum number of categories to 50
 but the thresholding procedure ended up selecting 20-30. Moving the maximum beyond 50 would have

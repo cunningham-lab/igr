@@ -39,6 +39,14 @@ def sample_from_uniform_mix(size: int, initial_point: int, middle_point: int, fi
     return mixture_samples
 
 
+def initialize_mu_and_xi_equally(shape):
+    mu = tf.constant(0., dtype=tf.float32, shape=shape)
+    xi = tf.constant(0., dtype=tf.float32, shape=shape)
+    mu = tf.Variable(mu)
+    xi = tf.Variable(xi)
+    return mu, xi
+
+
 def initialize_mu_and_xi_for_logistic(shape, seed: int = 21) -> Tuple[tf.Variable, tf.Variable]:
     categories = shape[1]
     np.random.RandomState(seed=seed)

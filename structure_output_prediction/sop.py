@@ -2,7 +2,7 @@ from Utils.load_data import load_mnist_sop_data
 from Models.SOPOptimizer import run_sop
 import tensorflow as tf
 
-model_type = 'IGR'
+model_type = 'IGR_I'
 hyper = {'width_height': (14, 28, 1),
          'model_type': model_type,
          'batch_size': 64, 'learning_rate': 0.0003,

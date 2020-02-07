@@ -9,8 +9,12 @@ def count_zeros_in_gradient(grad_dict):
     grad_np = np.zeros(shape=100)
     i = 0
     for k, v in grad_dict.items():
+        # z = np.mean(np.mean(v[:, 0, :], axis=0))
+        # z = np.mean(np.var(v[:, 0, :], axis=0))
+        # grad_np[i] = z
         v = v.flatten()
-        z = v == 0.
+        # z = v == 0.
+        z = np.abs(v) <= 1.e-10
         grad_np[i] = np.mean(z)
         i += 1
     return grad_np
@@ -23,25 +27,28 @@ def add_mean_std_plot_line(runs, color, label, offset=5, linestyle='-'):
 
 
 def add_mean_lines(runs, color, offset, label, linestyle):
+    run_axis = 0
     runs_num = np.arange(runs.shape[1]) + offset
-    run_mean = np.mean(runs, axis=0)
+    run_mean = np.mean(runs, axis=run_axis)
     plt.plot(runs_num, run_mean, label=label, color=color, linestyle=linestyle)
 
 
 def add_std_lines(runs, color, offset, alpha=0.5):
+    run_axis = 0
     runs_num = np.arange(runs.shape[1]) + offset
-    run_mean = np.mean(runs, axis=0)
-    total_runs = runs.shape[0]
-    run_std = np.std(runs, axis=0) / total_runs
+    run_mean = np.mean(runs, axis=run_axis)
+    total_runs = runs.shape[run_axis]
+    run_std = np.std(runs, axis=run_axis) / total_runs
     plt.vlines(runs_num, ymin=run_mean - run_std, ymax=run_mean + run_std, color=color, alpha=alpha)
 
 
 def make_np_of_var_from_log_files(variable_name: str, files_list: list, path_to_files: str):
     results_list = []
-    for file in files_list:
-        variable_np = get_variable_np_array_from_log_file(variable_name=variable_name,
-                                                          path_to_file=path_to_files + file)
-        results_list.append(variable_np)
+    for f in files_list:
+        if not f.startswith('.'):
+            variable_np = get_variable_np_array_from_log_file(variable_name=variable_name,
+                                                              path_to_file=path_to_files + f)
+            results_list.append(variable_np)
     results_np = create_global_np_array_from_results(results_list=results_list)
     return results_np
 

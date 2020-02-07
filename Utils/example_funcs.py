@@ -12,9 +12,6 @@ Contains the auxiliary functions for the distributions
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-from scipy.stats import poisson
-from Utils.initializations import get_initial_analytical_mus
-from Utils.Distributions import compute_log_logit_normal
 from matplotlib import pyplot as plt
 # ===========================================================================================================
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -77,7 +74,12 @@ def plot_experiment_results(gs, sb, poisson_means, categories, y_label, analysis
 def plot_loss_and_initial_final_histograms(ax, loss_iter, p_samples, q_samples, q_samples_init,
                                            title: str, number_of_bins: int = 15):
     total_iterations = loss_iter.shape[0]
-    ylim = 0.2
+    hist_color = '#377eb8'
+    label = 'IGR-SB'
+    # hist_color = '#984ea3'
+    # label = 'GS with K = 12'
+    ylim = 0.3
+    xlim = 12
     ax[0].set_title(title)
     ax[0].set_xlabel('Iterations')
     ax[0].set_ylabel('Loss')
@@ -88,30 +90,28 @@ def plot_loss_and_initial_final_histograms(ax, loss_iter, p_samples, q_samples, 
     ax[0].legend()
 
     ax[1].hist(p_samples, bins=np.arange(number_of_bins), color='grey', alpha=0.5, label='p', density=True)
-    ax[1].hist(q_samples_init, bins=np.arange(number_of_bins), color='red', alpha=0.5,
-               label='q', density=True)
+    ax[1].hist(q_samples_init, bins=np.arange(number_of_bins), color=hist_color, alpha=0.5,
+               label=label, density=True)
     ax[1].set_ylim([0, ylim])
+    ax[1].set_xlim([0, xlim])
     ax[1].set_title('Initial distribution')
-    ax[1].set_ylabel('Normalized Counts')
-    ax[1].set_xlabel('Bins')
     ax[1].legend()
 
     ax[2].hist(p_samples, bins=np.arange(number_of_bins), color='grey', alpha=0.5, label='p', density=True)
-    ax[2].hist(q_samples, bins=np.arange(number_of_bins), color='red', alpha=0.5, label='q', density=True)
+    ax[2].hist(q_samples, bins=np.arange(number_of_bins), color=hist_color, alpha=0.5, label=label, density=True)
     ax[2].set_title('Final distribution')
     ax[2].set_ylim([0, ylim])
-    ax[2].set_ylabel('Normalized Counts')
-    ax[2].set_xlabel('Bins')
+    ax[2].set_xlim([0, xlim])
     ax[2].legend()
 
 
 def plot_histograms_of_gs(ax, p_samples, q_samples_list, q_samples_init_list, number_of_bins: int = 15):
-    colors = ['green', 'blue', 'orange']
+    colors = ['#c5a6fa', '#4e17aa', '#2c0d61']
     k = [20, 40, 100]
     # y_lim = 0.35
     # k = [10]
     y_lim = 0.2
-    x_lim = 60
+    x_lim = 70
     ax[0].hist(p_samples, bins=np.arange(number_of_bins), color='grey', alpha=0.5, label='p',
                density=True)
     for i in range(len(q_samples_init_list)):
@@ -154,24 +154,6 @@ def compute_num(psi: tf.Tensor) -> tf.Tensor:
     running = tf.constant(value=np.arange(size_n), dtype=tf.float32, shape=(size_n, 1))
     expectation = tf.reduce_sum(running * psi, axis=0)
     return expectation
-
-
-def compute_log_q_poisson(kappa: tf.Tensor,
-                          delta: tf.Tensor,
-                          n_required: int,
-                          poisson_mean: tf.Tensor) -> tf.Tensor:
-    probs = np.array([poisson.pmf(k=k, mu=poisson_mean.numpy()) for k in range(n_required)])
-    mu_0 = np.zeros(shape=(n_required, kappa.shape[1]))
-    mu_0[:n_required, :] = get_initial_analytical_mus(probs=probs, initialization_type='stick-break')
-    mu_0 = tf.constant(value=mu_0, dtype=tf.float32)
-    chi_0 = tf.constant(value=0.541324854612918, dtype=tf.float32,
-                        shape=(n_required, kappa.shape[1]))
-    sigma_0 = tf.math.softplus(chi_0)
-    epsilon_0 = (delta[:n_required] - mu_0) / sigma_0
-    log_q_kappa = compute_log_logit_normal(kappa=kappa[:n_required],
-                                           sigma=sigma_0[:n_required],
-                                           epsilon=epsilon_0[:n_required])
-    return log_q_kappa
 
 
 def sample_poisson_truncated(truncated_at: int, sample_size: int, poisson_mean: np.ndarray) -> np.ndarray:

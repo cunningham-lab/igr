@@ -3,18 +3,18 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 
 
-def load_vae_dataset(dataset_name, batch_n, epochs, run_with_sample=True, architecture='dense'):
+def load_vae_dataset(dataset_name, batch_n, epochs, hyper, run_with_sample=True, architecture='dense'):
     images_to_display = [10, 25, 5, 29, 1, 35, 18, 30, 6, 19, 15, 23, 11, 21, 17, 26, 344, 3567, 9, 20]
     if dataset_name == 'fmnist':
         if architecture == 'conv_jointvae':
             _, np_test_images = fetch_and_binarize_mnist_data(use_fashion=True)
-            image_size = (32, 32, 1)
+            image_shape = (32, 32, 1)
             data = load_mnist_data(batch_n=batch_n, epochs=epochs, run_with_sample=run_with_sample,
                                    resize=True, use_fashion=True)
-            np_test_images = tf.image.resize(np_test_images, size=image_size[0:2]).numpy()
+            np_test_images = tf.image.resize(np_test_images, size=image_shape[0:2]).numpy()
         else:
             _, np_test_images = fetch_and_binarize_mnist_data(use_fashion=True)
-            image_size = (28, 28, 1)
+            image_shape = (28, 28, 1)
             data = load_mnist_data(batch_n=batch_n, epochs=epochs, run_with_sample=run_with_sample,
                                    resize=False, use_fashion=True)
         np_test_images = np_test_images[images_to_display, :, :, :]
@@ -22,37 +22,47 @@ def load_vae_dataset(dataset_name, batch_n, epochs, run_with_sample=True, archit
     elif dataset_name == 'mnist':
         if architecture == 'conv_jointvae':
             _, np_test_images = fetch_and_binarize_mnist_data()
-            image_size = (32, 32, 1)
+            image_shape = (32, 32, 1)
             data = load_mnist_data(batch_n=batch_n, epochs=epochs, run_with_sample=run_with_sample,
                                    resize=True)
-            np_test_images = tf.image.resize(np_test_images, size=image_size[0:2]).numpy()
+            np_test_images = tf.image.resize(np_test_images, size=image_shape[0:2]).numpy()
         else:
             _, np_test_images = fetch_and_binarize_mnist_data()
-            image_size = (28, 28, 1)
+            image_shape = (28, 28, 1)
             data = load_mnist_data(batch_n=batch_n, epochs=epochs, run_with_sample=run_with_sample,
                                    resize=False)
         np_test_images = np_test_images[images_to_display, :, :, :]
         train_dataset, test_dataset, batch_n, epochs = data
     elif dataset_name == 'celeb_a':
-        image_size = (64, 64, 3)
-        # image_size = (218, 178, 3)
-        pd = ProcessData(dataset_name=dataset_name, run_with_sample=run_with_sample, image_size=image_size)
+        image_shape = (64, 64, 3)
+        # image_shape = (218, 178, 3)
+        pd = ProcessData(dataset_name=dataset_name, run_with_sample=run_with_sample, image_shape=image_shape)
         output = pd.generate_train_and_test_partitions(batch_size=batch_n, epochs=epochs,
                                                        test_size=19962)
         split_data, batch_size, epochs, np_test_images = output
         train_dataset, test_dataset = split_data
     elif dataset_name == 'omniglot':
-        image_size = (96, 96, 1)
-        pd = ProcessData(dataset_name=dataset_name, run_with_sample=run_with_sample, image_size=image_size)
+        image_shape = (96, 96, 1)
+        pd = ProcessData(dataset_name=dataset_name, run_with_sample=run_with_sample, image_shape=image_shape)
         output = pd.generate_train_and_test_partitions(batch_size=batch_n, epochs=epochs,
                                                        test_size=13180)
         split_data, batch_size, epochs, np_test_images = output
         train_dataset, test_dataset = split_data
     else:
         raise RuntimeError
+
+    hyper = refresh_hyper(hyper, batch_n, epochs, image_shape, dataset_name, run_with_sample)
+    return train_dataset, test_dataset, np_test_images, hyper
+
+
+def refresh_hyper(hyper, batch_n, epochs, image_shape, dataset_name, run_with_sample):
     iter_per_epoch = determine_iter_per_epoch(dataset_name=dataset_name, run_with_sample=run_with_sample,
                                               batch_n=batch_n)
-    return train_dataset, test_dataset, np_test_images, batch_n, epochs, image_size, iter_per_epoch
+    hyper['batch_n'] = batch_n
+    hyper['epochs'] = epochs
+    hyper['image_shape'] = image_shape
+    hyper['iter_per_epoch'] = iter_per_epoch
+    return hyper
 
 
 def load_mnist_data(batch_n, epochs, use_fashion=False, run_with_sample=False, resize=False):
@@ -102,10 +112,10 @@ def fetch_and_binarize_mnist_data(use_fashion=False, output_labels=False):
 
 class ProcessData:
 
-    def __init__(self, dataset_name, image_size: tuple = (28, 28, 1), run_with_sample=False):
+    def __init__(self, dataset_name, image_shape: tuple = (28, 28, 1), run_with_sample=False):
         self.dataset_name = dataset_name
         self.run_with_sample = run_with_sample
-        self.image_size = image_size
+        self.image_shape = image_shape
 
     def generate_train_and_test_partitions(self, batch_size, epochs, test_size):
         data = fetch_data_via_tf_datasets(dataset_name=self.dataset_name)
@@ -129,7 +139,7 @@ class ProcessData:
 
     def fetch_test_numpy_images(self, test_ds, test_size):
         test_images = iterate_over_dataset_container(data_iterable=test_ds, test_size=test_size,
-                                                     image_size=self.image_size)
+                                                     image_shape=self.image_shape)
         images_to_display = [10, 25, 5, 29, 1, 35, 18, 30, 6, 19, 15, 23, 11, 21, 17, 26, 344, 3567, 9, 20]
         return test_images[images_to_display, :, :, :]
 
@@ -184,8 +194,8 @@ def crop_tensor(tensor, limit: int):
     return tensor
 
 
-def iterate_over_dataset_container(data_iterable, test_size, image_size):
-    images = np.zeros(shape=(test_size,) + image_size)
+def iterate_over_dataset_container(data_iterable, test_size, image_shape):
+    images = np.zeros(shape=(test_size,) + image_shape)
     i = 0
     for image in data_iterable:
         for batch_idx in range(image.shape[0]):

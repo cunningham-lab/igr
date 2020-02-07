@@ -5,51 +5,52 @@ os_env['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 class VAENet(tf.keras.Model):
-    def __init__(self, hyper: dict, image_shape: tuple = (28, 28, 1)):
+    def __init__(self, hyper: dict):
         super(VAENet, self).__init__()
         self.cont_latent_n = hyper['latent_norm_n']
         self.cont_var_num = hyper['num_of_norm_var']
         self.cont_param_num = hyper['num_of_norm_param']
-        self.disc_latent_n = hyper['latent_discrete_n']
+        self.disc_latent_in = hyper['n_required']
+        self.disc_latent_out = hyper['latent_discrete_n']
         self.disc_var_num = hyper['num_of_discrete_var']
         self.disc_param_num = hyper['num_of_discrete_param']
         self.architecture_type = hyper['architecture']
-        self.batch_size = hyper['batch_n']
-        self.model_name = hyper['dataset_name']
-        self.log_px_z_params_num = 1 if self.model_name == 'mnist' else 2
-        # self.log_px_z_params_num = 1 if self.model_name == 'celeb_a' else 1
+        self.dataset_name = hyper['dataset_name']
+        self.model_type = hyper['model_type']
+        self.image_shape = hyper['image_shape']
 
+        self.log_px_z_params_num = 1 if self.dataset_name == 'mnist' else 2
         self.latent_dim_in = (self.cont_param_num * self.cont_latent_n * self.cont_var_num +
-                              self.disc_param_num * self.disc_latent_n * self.disc_var_num)
+                              self.disc_param_num * self.disc_latent_in * self.disc_var_num)
         self.latent_dim_out = (self.cont_var_num * self.cont_latent_n +
-                               self.disc_var_num * self.disc_latent_n)
+                               self.disc_var_num * self.disc_latent_out)
         self.split_sizes_list = [self.cont_latent_n * self.cont_var_num for _ in range(self.cont_param_num)]
-        self.split_sizes_list += [self.disc_latent_n * self.disc_var_num for _ in range(self.disc_param_num)]
+        self.split_sizes_list += [self.disc_latent_in * self.disc_var_num for _ in range(self.disc_param_num)]
         self.num_var = (self.cont_var_num, self.disc_var_num)
 
-        self.image_shape = image_shape
         self.inference_net = tf.keras.Sequential
         self.generative_net = tf.keras.Sequential
-        self.sop_net = tf.keras.Sequential
         self.planar_flow = tf.keras.Sequential
 
     def construct_architecture(self):
         if self.architecture_type == 'dense':
             self.generate_dense_inference_net()
-            self.generate_dense_generative_net()
-        elif self.architecture_type == 'dense_nf':
-            self.generate_dense_inference_net()
-            self.generate_planar_flow()
+            if self.model_type.find('Planar') > 0:
+                self.generate_planar_flow()
             self.generate_dense_generative_net()
         elif self.architecture_type == 'conv':
             self.generate_convolutional_inference_net()
             self.generate_convolutional_generative_net()
         elif self.architecture_type == 'conv_jointvae':
-            if self.model_name == 'celeb_a' or self.model_name == 'fmnist':
+            if self.dataset_name == 'celeb_a' or self.dataset_name == 'fmnist':
                 self.generate_convolutional_inference_net_jointvae_celeb_a()
+                if self.model_type.find('Planar') > 0:
+                    self.generate_planar_flow()
                 self.generate_convolutional_generative_net_jointvae_celeb_a()
             else:
                 self.generate_convolutional_inference_net_jointvae()
+                if self.model_type.find('Planar') > 0:
+                    self.generate_planar_flow()
                 self.generate_convolutional_generative_net_jointvae()
 
     # -------------------------------------------------------------------------------------------------------
@@ -65,12 +66,7 @@ class VAENet(tf.keras.Model):
         ])
 
     def generate_dense_generative_net(self):
-        if self.model_name == 'celeb_a' or self.model_name == 'fmnist':
-            activation_type = 'elu'
-        elif self.model_name == 'mnist':
-            activation_type = 'linear'
-        else:
-            raise RuntimeError
+        activation_type = self.determine_activation_from_case()
         self.generative_net = tf.keras.Sequential([
             tf.keras.layers.InputLayer(input_shape=(self.latent_dim_out,)),
             tf.keras.layers.Dense(units=256, activation='relu'),
@@ -81,11 +77,20 @@ class VAENet(tf.keras.Model):
                                                   self.image_shape[2] * self.log_px_z_params_num))
         ])
 
+    def determine_activation_from_case(self):
+        if self.dataset_name == 'celeb_a' or self.dataset_name == 'fmnist':
+            activation_type = 'elu'
+        elif self.dataset_name == 'mnist':
+            activation_type = 'linear'
+        else:
+            raise RuntimeError
+        return activation_type
+
     def generate_planar_flow(self):
         self.planar_flow = tf.keras.Sequential([
-            tf.keras.layers.InputLayer(input_shape=(self.disc_latent_n, 1, self.disc_var_num)),
-            PlanarFlowLayer(units=self.disc_latent_n, var_num=self.disc_var_num),
-            PlanarFlowLayer(units=self.disc_latent_n, var_num=self.disc_var_num)])
+            tf.keras.layers.InputLayer(input_shape=(self.disc_latent_in, 1, self.disc_var_num)),
+            PlanarFlowLayer(units=self.disc_latent_in, var_num=self.disc_var_num),
+            PlanarFlowLayer(units=self.disc_latent_in, var_num=self.disc_var_num)])
 
     # -------------------------------------------------------------------------------------------------------
     def generate_convolutional_inference_net_jointvae(self):
@@ -188,28 +193,25 @@ class VAENet(tf.keras.Model):
         ])
 
     # -------------------------------------------------------------------------------------------------------
-    # Encoding and Decoding Methods
     def encode(self, x):
-        params = self.split_network_parameters(x=x)
+        params = self.split_and_reshape_network_parameters(x=x)
         return params
 
-    def decode(self, z):
-        logits = tf.split(self.generative_net(z), num_or_size_splits=self.log_px_z_params_num, axis=3)
-        return logits
-
-    def split_network_parameters(self, x):
+    def split_and_reshape_network_parameters(self, x):
         params = tf.split(self.inference_net(x), num_or_size_splits=self.split_sizes_list, axis=1)
         reshaped_params = []
         for idx, param in enumerate(params):
             batch_size = param.shape[0]
             if self.disc_var_num > 1:
-                param = tf.reshape(param,
-                                   shape=(batch_size, self.disc_latent_n, 1, self.disc_var_num))
+                param = tf.reshape(param, shape=(batch_size, self.disc_latent_in, 1, self.disc_var_num))
             else:
-                param = tf.reshape(param,
-                                   shape=(batch_size, self.split_sizes_list[idx], 1, self.disc_var_num))
+                param = tf.reshape(param, shape=(batch_size, self.split_sizes_list[idx], 1, self.disc_var_num))
             reshaped_params.append(param)
         return reshaped_params
+
+    def decode(self, z):
+        logits = tf.split(self.generative_net(z), num_or_size_splits=self.log_px_z_params_num, axis=3)
+        return logits
     # -------------------------------------------------------------------------------------------------------
 
 
@@ -255,7 +257,7 @@ def determine_path_to_save_results(model_type, dataset_name):
     return results_path
 
 
-def setup_model(hyper, image_size):
-    model = VAENet(hyper=hyper, image_shape=image_size)
+def construct_networks(hyper):
+    model = VAENet(hyper=hyper)
     model.construct_architecture()
     return model

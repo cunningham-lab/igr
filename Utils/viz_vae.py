@@ -7,7 +7,8 @@ import tensorflow as tf
 from scipy.stats import norm
 
 
-def plot_reconstructions_samples_and_traversals(model, hyper, epoch, results_path, test_images, vae_opt):
+def plot_reconstructions_samples_and_traversals(hyper, epoch, results_path, test_images, vae_opt):
+    model = vae_opt.nets
     if hyper['latent_norm_n'] > 0:
         plot_grid_of_fixed_cont_traversal_along_all_disc_dim(
             model=model, fixed_cont_dim=np.random.choice(a=hyper['latent_norm_n'], size=1)[0],
@@ -35,6 +36,7 @@ def plot_reconstructions_samples_and_traversals(model, hyper, epoch, results_pat
         plot_based_on_color_or_black(recon_image=recon_probs[i, :, :, 0])
         plt.axis('off')
     plt.savefig(results_path + f'/Reconstruction_{epoch}.png')
+    plt.close()
 
 
 def plot_originals(test_images, results_path):
@@ -44,6 +46,7 @@ def plot_originals(test_images, results_path):
         plot_based_on_color_or_black(recon_image=test_images[i, :, :])
         plt.axis('off')
     plt.savefig(results_path + f'/Reconstruction.png')
+    plt.close()
 
 
 def plot_based_on_color_or_black(recon_image, rgb_location=2):
@@ -72,6 +75,7 @@ def plot_grid_of_fixed_cont_traversal_along_all_disc_dim(model, fixed_cont_dim, 
             pointer += 1
             plt.axis('off')
     plt.savefig(plots_path + f'fixed_cont_{fixed_cont_dim:d}.png')
+    plt.close()
 
 
 def plot_grid_of_continuous_traversals_with_fixed_one_hot(model, fixed_cat, discrete_dim_n,
@@ -90,6 +94,7 @@ def plot_grid_of_continuous_traversals_with_fixed_one_hot(model, fixed_cat, disc
             pointer += 1
             plt.axis('off')
     plt.savefig(plots_path + f'grid_for_{fixed_cat:d}.png')
+    plt.close()
 
 
 def plot_grid_of_random_cont_samples_along_all_disc_dim(model, cont_dim_n, discrete_dim_n, samples_n,
@@ -108,6 +113,7 @@ def plot_grid_of_random_cont_samples_along_all_disc_dim(model, cont_dim_n, discr
             pointer += 1
             plt.axis('off')
     plt.savefig(plots_path + f'random_sample.png')
+    plt.close()
 
 
 def set_grid_specifications(nrows, ncols):

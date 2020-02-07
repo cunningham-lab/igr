@@ -1,4 +1,6 @@
 import tensorflow as tf
+from Utils.Distributions import IGR_I, IGR_SB_Finite, IGR_Planar
+from Models.VAENet import PlanarFlowLayer
 
 
 class SOP(tf.keras.Model):
@@ -17,6 +19,10 @@ class SOP(tf.keras.Model):
         self.layer2 = tf.keras.layers.Dense(units=self.units_per_layer * self.var_num)
         self.layer3 = tf.keras.layers.Dense(units=self.half_image_size)
         self.layer4 = tf.keras.layers.Reshape(self.half_image_w_h)
+        if self.model_type == 'IGR_Planar':
+            self.planar_flow = generate_planar_flow(disc_latent_in=1, disc_var_num=self.units_per_layer)
+        else:
+            self.planar_flow = None
 
     def call(self, x_upper, sample_size=1, discretized=False):
         batch_n, width, height, rgb = x_upper.shape
@@ -38,8 +44,9 @@ class SOP(tf.keras.Model):
     def sample_bernoulli(self, params, discretized):
         if self.model_type == 'GS':
             psi = sample_gs_bernoulli(params=params, temp=self.temp, discretized=discretized)
-        elif self.model_type == 'IGR':
-            psi = sample_igr_bernoulli(params=params, temp=self.temp, discretized=discretized)
+        elif self.model_type in ['IGR_I', 'IGR_SB', 'IGR_Planar']:
+            psi = sample_igr_bernoulli(model_type=self.model_type, params=params, temp=self.temp,
+                                       discretized=discretized, planar_flow=self.planar_flow)
         else:
             raise RuntimeError
         return psi
@@ -47,8 +54,6 @@ class SOP(tf.keras.Model):
 
 def sample_gs_bernoulli(params, temp, discretized):
     log_alpha_broad = params[0]
-    # log_alpha = params[0]
-    # log_alpha_broad = brodcast_to_sample_size(a=log_alpha, sample_size=sample_size)
     unif = tf.random.uniform(shape=log_alpha_broad.shape)
     gumbel = -tf.math.log(-tf.math.log(unif + 1.e-20))
     lam = (log_alpha_broad + gumbel) / temp
@@ -56,16 +61,27 @@ def sample_gs_bernoulli(params, temp, discretized):
     return psi
 
 
-def sample_igr_bernoulli(params, temp, discretized):
-    mu_broad, xi_broad = params
-    # mu, xi = params
-    # mu_broad = brodcast_to_sample_size(mu, sample_size=sample_size)
-    # xi_broad = brodcast_to_sample_size(xi, sample_size=sample_size)
-    epsilon = tf.random.normal(shape=mu_broad.shape)
-    sigma = tf.math.exp(xi_broad)
-    lam = (mu_broad + sigma * epsilon) / temp
-    psi = project_to_vertices(lam=lam, discretized=discretized)
+def sample_igr_bernoulli(model_type, params, temp, discretized, planar_flow):
+    dist = get_igr_dist(model_type, params, temp, planar_flow)
+    dist.generate_sample()
+    psi = project_to_vertices(lam=dist.lam[:, 0, 0, :], discretized=discretized)
     return psi
+
+
+def get_igr_dist(model_type, params, temp, planar_flow):
+    mu, xi = params
+    batch_n, num_of_vars = mu.shape
+    mu_broad = tf.reshape(mu, shape=(batch_n, 1, 1, num_of_vars))
+    xi_broad = tf.reshape(xi, shape=(batch_n, 1, 1, num_of_vars))
+    if model_type == 'IGR_I':
+        dist = IGR_I(mu=mu_broad, xi=xi_broad, temp=temp)
+    elif model_type == 'IGR_Planar':
+        dist = IGR_Planar(mu=mu_broad, xi=xi_broad, temp=temp, planar_flow=planar_flow)
+    elif model_type == 'IGR_SB':
+        dist = IGR_SB_Finite(mu=mu_broad, xi=xi_broad, temp=temp)
+    else:
+        raise ValueError
+    return dist
 
 
 def project_to_vertices(lam, discretized):
@@ -82,3 +98,11 @@ def brodcast_to_sample_size(a, sample_size):
     a = tf.reshape(a, shape=newshape)
     a = tf.broadcast_to(a, shape=broad_shape)
     return a
+
+
+def generate_planar_flow(disc_latent_in, disc_var_num):
+    planar_flow = tf.keras.Sequential([
+        tf.keras.layers.InputLayer(input_shape=(disc_latent_in, 1, disc_var_num)),
+        PlanarFlowLayer(units=disc_latent_in, var_num=disc_var_num),
+        PlanarFlowLayer(units=disc_latent_in, var_num=disc_var_num)])
+    return planar_flow

@@ -2,27 +2,22 @@ import pickle
 from matplotlib import pyplot as plt
 from Utils.general import count_zeros_in_gradient
 
-path_to_files_gs_15 = './Results/gradients/grad_gs_25/gradients_100.pkl'
-path_to_files_gs_67 = './Results/gradients/grad_gs_67/gradients_100.pkl'
-path_to_files_igr_50 = './Results/gradients/grad_igr_50/gradients_100.pkl'
-path_to_files_igr_10 = './Results/gradients/grad_igr_10/gradients_100.pkl'
-
-with open(file=path_to_files_gs_15, mode='rb') as f:
-    gs_15 = pickle.load(f)
-
-with open(file=path_to_files_gs_67, mode='rb') as f:
-    gs_67 = pickle.load(f)
-
-with open(file=path_to_files_igr_10, mode='rb') as f:
-    igr_10 = pickle.load(f)
-
-with open(file=path_to_files_igr_50, mode='rb') as f:
-    igr_50 = pickle.load(f)
-
-grad_gs_15 = count_zeros_in_gradient(grad_dict=gs_15)
-grad_gs_67 = count_zeros_in_gradient(grad_dict=gs_67)
-grad_igr_10 = count_zeros_in_gradient(grad_dict=igr_10)
-grad_igr_50 = count_zeros_in_gradient(grad_dict=igr_50)
+path = './Results/grads/'
+models = {
+    # 1: {'model': 'igr_planar_cv', 'label': 'IGR_Planar(0.85)', 'color': '#e41a1c'},
+    2: {'model': 'igr_planar_20', 'label': 'IGR-Planar(0.3)', 'color': '#e41a1c'},
+    # 3: {'model': 'igr_sb_cv', 'label': 'IGR_SB(0.1)', 'color': '#377eb8'},
+    4: {'model': 'igr_sb_20', 'label': 'IGR-SB(0.02)', 'color': '#377eb8'},
+    # 5: {'model': 'igr_i_cv', 'label': 'IGR_I(1.0)', 'color': '#4daf4a'},
+    6: {'model': 'igr_i_20', 'label': 'IGR-I(0.1)', 'color': '#4daf4a'},
+    # 7: {'model': 'gs_cv', 'label': 'GS(1.0)', 'color': '#984ea3'},
+    8: {'model': 'gs_20', 'label': 'GS(0.25)', 'color': '#984ea3'},
+}
+for key, val in models.items():
+    dirs = path + val['model'] + '/gradients_100.pkl'
+    with open(file=dirs, mode='rb') as f:
+        output = pickle.load(f)
+        models[key]['grads'] = count_zeros_in_gradient(grad_dict=output) * 100
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # ===========================================================================================================
@@ -30,14 +25,16 @@ grad_igr_50 = count_zeros_in_gradient(grad_dict=igr_50)
 # ===========================================================================================================
 plt.style.use(style='ggplot')
 plt.figure(dpi=150)
-plt.plot(grad_igr_50, label='IGR(0.50)', color='blue')
-plt.plot(grad_gs_67, label='GS(0.67)', color='green')
-plt.plot(grad_igr_10, label='IGR(0.10)', color='blue', linestyle='--')
-plt.plot(grad_gs_15, label='GS(0.25)', color='green', linestyle='--')
+for _, model in models.items():
+    linestyle = '-' if model['model'].find('cv') > 0 else '--'
+    plt.plot(model['grads'], label=model['label'],
+             color=model['color'], linestyle=linestyle)
+
 plt.ylabel('% of Vanished Gradients in Batch')
 plt.xlabel('Epochs')
+# plt.ylim([-0.01, 0.01])
 plt.legend()
-plt.savefig('./Results/Outputs/gradients.png')
 plt.tight_layout()
+plt.savefig('./Results/Outputs/gradients.png')
 plt.show()
 # ===========================================================================================================

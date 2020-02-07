@@ -25,7 +25,7 @@ samples_plot_n = int(1.e4)
 batch_n = 1
 np.random.RandomState(seed=21)
 pool = Pool()
-temp_init, temp_final = 0.1, 0.1
+temp = 0.1
 threshold = 0.99
 # categories_n = 10
 # categories_n = 12
@@ -33,17 +33,15 @@ categories_n = 100
 # categories_n = 200
 shape = (batch_n, categories_n, 1, 1)
 type_temp_schedule = 'constant'
-model_type = 'ExpGS'
-# model_type = 'sb'
-# model_type = 'GauSoftMax'
+model_type = 'GS'
 
 skip_first_iterations = 10
 tolerance = 1.e-5
 
 uniform_probs = np.array([1 / categories_n for _ in range(categories_n)])
 
-run_against = 'negative_binomial'
 # run_against = 'poisson'
+run_against = 'negative_binomial'
 # run_against = 'discrete'
 # run_against = 'binomial'
 
@@ -114,33 +112,28 @@ for i in range(len(categories_n_list)):
     shape = (batch_n, categories_n, 1, 1)
     params, params_init = get_initial_params_for_model_type(model_type=model_type, shape=shape)
 
-    minimizer = MinimizeEmpiricalLoss(learning_rate=learning_rate, temp_init=temp_init,
-                                      temp_final=temp_final, pool=pool, sample_size=sample_size,
-                                      tolerance=tolerance, run_kl=True,
-                                      max_iterations=total_iterations, model_type=model_type,
-                                      type_temp_schedule=type_temp_schedule)
-    minimizer.set_variables(params=params)
-    minimizer.threshold = threshold
-    minimizer.run_iteratively = True
+    minimizer = MinimizeEmpiricalLoss(learning_rate=learning_rate, temp=temp, sample_size=sample_size,
+                                      tolerance=tolerance, run_kl=True, params=params,
+                                      max_iterations=total_iterations, model_type=model_type, threshold=threshold)
     minimizer.optimize_model(mean_p=mean_p, var_p=var_p, probs=probs, p_samples=p_samples)
 
-    temp = tf.constant(0.1, dtype=tf.float32)
+    temp = tf.constant(temp, dtype=tf.float32)
     q_samples = np.zeros(shape=samples_plot_n)
     q_samples_init = np.zeros(shape=samples_plot_n)
     for sample_id in range(samples_plot_n):
         q_samples[sample_id] = generate_sample(sample_size=1, params=params, temp=temp,
                                                threshold=minimizer.threshold,
-                                               dist_type=model_type)[0, 0]
+                                               dist_type=model_type)
         q_samples_init[sample_id] = generate_sample(sample_size=1, params=params_init, dist_type=model_type,
-                                                    temp=temp, threshold=minimizer.threshold)[0, 0]
+                                                    temp=temp, threshold=minimizer.threshold)
     categories_n
     q_samples_list.append(q_samples)
     q_samples_init_list.append(q_samples_init)
     print(f'{model_type}')
-    print(f'Mean {np.mean(minimizer.q_samples):4.2f} || '
-          f'Var {np.var(minimizer.q_samples):4.2f} || '
-          f'Std {np.std(minimizer.q_samples):4.2f}'
-          f'\nMin: {np.min(minimizer.q_samples):4.0f} || Max {np.max(minimizer.q_samples):4.0f}')
+    print(f'Mean {np.mean(q_samples):4.2f} || '
+          f'Var {np.var(q_samples):4.2f} || '
+          f'Std {np.std(q_samples):4.2f}'
+          f'\nMin: {np.min(q_samples):4.0f} || Max {np.max(q_samples):4.0f}')
     print('\nOriginal Dist')
     print(f'Mean {mean_p:4.2f} || Var {var_p:4.2f} || Std {std_p:4.2f}'
           f'\nMin: {min_p:4d} || Max {max_p:4d}')
