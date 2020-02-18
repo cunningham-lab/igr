@@ -1,0 +1,34 @@
+Bootstrap: docker
+From: tensorflow/tensorflow:2.0.1-gpu-py3
+
+%post
+
+  # Reset sources to https://us.archive.ubuntu.com for apt install to work
+  sed -i 's/http:\/\/archive.ubuntu.com/http:\/\/us.archive.ubuntu.com/' /etc/apt/sources.list
+
+  # Upgrade pip first
+  pip install --upgrade pip
+  echo $(python --version)
+  echo $(which pip)
+
+  # Tensorflow addons
+  pip install --no-deps tensorflow_addons
+
+  # with only pip install opencv will fail on import unable to link libs
+  pip install opencv-python
+  apt update && apt install -y libsm6 libxext6 libxrender-dev
+
+  pip install numba
+  pip install pandas
+  pip install scipy
+  pip install seaborn
+  pip install tensorflow_datasets==1.3.0
+
+  # Shell Utils
+  apt update && apt install -y tmux
+
+%help
+
+  This is a Tensorflow 2 container with gpu support and additional useful
+  pip packages. Based on https://github.com/saravanabalagi/singularity_tensorflow
+

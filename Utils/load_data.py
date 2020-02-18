@@ -81,7 +81,7 @@ def load_mnist_data(batch_n, epochs, use_fashion=False, run_with_sample=False, r
     return train_dataset, test_dataset, batch_n, epochs
 
 
-def load_mnist_sop_data(batch_n, epochs, run_with_sample=False):
+def load_mnist_sop_data(batch_n, run_with_sample=False):
     train_images, test_images = fetch_and_binarize_mnist_data()
     if run_with_sample:
         train_buffer, test_buffer = 60, 10
@@ -151,11 +151,6 @@ def fetch_data_via_tf_datasets(dataset_name):
     return data
 
 
-def fetch_numpy_data_via_tf_datasets(dataset_name):
-    np_data = tfds.as_numpy(dataset=fetch_data_via_tf_datasets(dataset_name=dataset_name))
-    return np_data
-
-
 def determine_buffer_re_assign_batch_and_epochs(run_with_sample, batch_size, epochs):
     if run_with_sample:
         buffer, batch_size, epochs = 60, 5, 10
@@ -223,25 +218,6 @@ def determine_iter_per_epoch(dataset_name, run_with_sample, batch_n):
     else:
         raise RuntimeError
     return iter_per_epoch
-
-
-def get_dataset_from_tf(name: str):
-    builder = tfds.builder(name=name)
-    builder.download_and_prepare()
-    ds = builder.as_dataset(shuffle_files=False)
-    ds_numpy = tfds.as_numpy(dataset=ds)
-    return ds_numpy
-
-
-def put_into_numpy_arrays(dataset):
-    test_images = np.zeros(shape=(13180, 96, 96))
-    train_images = np.zeros(shape=(19280, 96, 96))
-    for i, test_image in enumerate(dataset['test']):
-        test_images[i, :, :] = test_image['image'][:96, :96, 0]
-
-    for i, train_image in enumerate(dataset['train']):
-        train_images[i, :, :] = train_image['image'][:96, :96, 0]
-    return train_images, test_images
 
 
 def reshape_binarize_and_scale_images(images, round_images=True):

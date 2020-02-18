@@ -1,13 +1,9 @@
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
 import numpy as np
 import tensorflow as tf
 from typing import Tuple, List
 from os import environ as os_env
+
 os_env['TF_CPP_MIN_LOG_LEVEL'] = '2'
-# ===========================================================================================================
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
 
 
 class Distributions:
@@ -45,6 +41,7 @@ class Distributions:
         return epsilon
 
 
+# noinspection PyPep8Naming
 class IGR_I(Distributions):
     def __init__(self, mu, xi, temp, sample_size=1, noise_type='normal'):
         super().__init__(batch_size=mu.shape[0], categories_n=mu.shape[1], sample_size=sample_size,
@@ -67,6 +64,7 @@ class IGR_I(Distributions):
         return lam
 
 
+# noinspection PyPep8Naming
 class IGR_Planar(IGR_I):
     def __init__(self, mu, xi, temp, planar_flow, sample_size=1, noise_type='normal'):
         super().__init__(mu, xi, temp, sample_size, noise_type)
@@ -77,6 +75,7 @@ class IGR_Planar(IGR_I):
         return lam
 
 
+# noinspection PyPep8Naming
 class IGR_SB(IGR_I):
 
     def __init__(self, mu, xi, temp, sample_size=1, noise_type='normal', threshold=0.99, run_iteratively=False):
@@ -112,17 +111,11 @@ class IGR_SB(IGR_I):
 
     def perform_truncation_via_threshold(self, vector):
         vector_cumsum = tf.math.cumsum(x=vector, axis=1)
-        larger_than_threshold = tf.where(condition=vector_cumsum <= self.threshold)
-        if self.truncation_option == 'quantile':
-            self.n_required = int((np.percentile(larger_than_threshold[:, 1] + 1, q=self.quantile)))
-        elif self.truncation_option == 'max':
-            self.n_required = (tf.math.reduce_max(larger_than_threshold[:, 1]) + 1).numpy()
-        elif self.truncation_option == 'mean':
-            self.n_required = (tf.math.reduce_mean(larger_than_threshold[:, 1]) + 1).numpy()
-        else:
-            raise ValueError
+        res = get_arrays_that_make_it(vector_cumsum, tf.constant(self.threshold))
+        self.n_required = int(np.percentile(res, q=self.quantile)) + 1
 
 
+# noinspection PyPep8Naming
 class IGR_SB_Finite(IGR_SB):
     def __init__(self, mu, xi, temp, sample_size=1, noise_type='normal'):
         super().__init__(mu=mu, xi=xi, temp=temp, sample_size=sample_size, noise_type=noise_type)
@@ -140,27 +133,24 @@ class GS(Distributions):
         self.log_pi = log_pi
 
     def generate_sample(self):
-        ς = 1.e-20
+        offset = 1.e-20
         log_pi_broad = self.broadcast_params_to_sample_size(params=[self.log_pi])[0]
         uniform = tf.random.uniform(shape=log_pi_broad.shape)
-        gumbel_sample = -tf.math.log(-tf.math.log(uniform + ς) + ς)
+        gumbel_sample = -tf.math.log(-tf.math.log(uniform + offset) + offset)
         self.lam = (log_pi_broad + gumbel_sample) / self.temp
         self.log_psi = self.lam - tf.math.reduce_logsumexp(self.lam, axis=1, keepdims=True)
         self.psi = tf.math.softmax(logits=self.lam, axis=1)
 
 
-# ===========================================================================================================
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
 # Distribution functions
 # ===========================================================================================================
 def compute_log_gs_dist(psi: tf.Tensor, logits: tf.Tensor, temp: tf.Tensor) -> tf.Tensor:
     n_required = tf.constant(value=psi.shape[1], dtype=tf.float32)
-    ς = tf.constant(1.e-20)
+    offset = tf.constant(1.e-20)
 
     log_const = tf.math.lgamma(n_required) + (n_required - 1) * tf.math.log(temp)
-    log_sum = tf.reduce_sum(logits - (temp + tf.constant(1.)) * tf.math.log(psi + ς), axis=1)
-    log_norm = - n_required * tf.math.log(tf.reduce_sum(tf.math.exp(logits) / psi ** temp, axis=1) + ς)
+    log_sum = tf.reduce_sum(logits - (temp + tf.constant(1.)) * tf.math.log(psi + offset), axis=1)
+    log_norm = - n_required * tf.math.log(tf.reduce_sum(tf.math.exp(logits) / psi ** temp, axis=1) + offset)
 
     log_p_concrete = log_const + log_sum + log_norm
     return log_p_concrete
@@ -175,9 +165,6 @@ def compute_log_exp_gs_dist(log_psi: tf.Tensor, logits: tf.Tensor, temp: tf.Tens
     return log_exp_gs_dist
 
 
-# ===========================================================================================================
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
 # Optimization functions for the Expectation Minimization Loss
 # ===========================================================================================================
 def compute_loss(params: List[tf.Tensor], temp: tf.Tensor, probs: tf.Tensor, dist_type: str = 'sb',
@@ -190,9 +177,9 @@ def compute_loss(params: List[tf.Tensor], temp: tf.Tensor, probs: tf.Tensor, dis
     psi_mean = tf.reduce_mean(chosen_dist.psi, axis=[0, 2, 3])
     if run_kl:
         if dist_type == 'GS':
-            loss = psi_mean * (tf.math.log(psi_mean) - tf.math.log(probs[:chosen_dist.n_required] + 1.e-20))
+            loss = psi_mean * (tf.math.log(psi_mean) - tf.math.log(probs[:chosen_dist.n_required]))
         else:
-            loss = psi_mean * (tf.math.log(psi_mean) - tf.math.log(probs[:chosen_dist.n_required + 1] + 1.e-20))
+            loss = psi_mean * (tf.math.log(psi_mean) - tf.math.log(probs[:chosen_dist.n_required + 1]))
         loss = tf.reduce_sum(loss)
     else:
         loss = tf.reduce_sum((psi_mean - probs[:chosen_dist.n_required + 1]) ** 2)
@@ -214,9 +201,6 @@ def apply_gradients(optimizer: tf.keras.optimizers, gradients: tf.Tensor, variab
     optimizer.apply_gradients(zip(gradients, variables))
 
 
-# ===========================================================================================================
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
 # Utils
 # ===========================================================================================================
 # @tf.function
@@ -233,6 +217,20 @@ def project_to_vertices_via_softmax_pp(lam):
     psi = tf.concat(values=[psi, extra_cat], axis=1)
 
     return psi
+
+
+@tf.function
+def get_arrays_that_make_it(vector_cumsum, threshold):
+    batch_n, categories_n, sample_size, _ = vector_cumsum.shape
+    result = tf.TensorArray(tf.int64, size=batch_n * sample_size)
+    i = tf.constant(0)
+    for b in tf.range(batch_n):
+        for s in tf.range(sample_size):
+            thres = tf.where(vector_cumsum[b, :, s, 0] <= threshold)
+            max_val = tf.math.reduce_max(thres, axis=0)[0]
+            result = result.write(i, max_val)
+            i += 1
+    return result.stack()
 
 
 def accumulate_one_minus_kappa_prods(kappa, lower, upper):
@@ -281,32 +279,33 @@ def broadcast_matrices_to_shape(lower, upper, batch_size, categories_n, sample_s
 @tf.function
 def iterative_sb(kappa):
     batch_size, max_size, sample_size, num_of_vars = kappa.shape
-    η = tf.TensorArray(dtype=tf.float32, size=max_size, clear_after_read=True,
-                       element_shape=(batch_size, sample_size, num_of_vars))
-    η = η.write(index=0, value=kappa[:, 0, :, :])
+    eta = tf.TensorArray(dtype=tf.float32, size=max_size, clear_after_read=True,
+                         element_shape=(batch_size, sample_size, num_of_vars))
+    eta = eta.write(index=0, value=kappa[:, 0, :, :])
     cumsum = tf.identity(kappa[:, 0, :, :])
     next_cumsum = tf.identity(kappa[:, 1, :, :] * (1 - kappa[:, 0, :, :]) + kappa[:, 0, :, :])
     max_iter = tf.constant(value=max_size - 1, dtype=tf.int32)
     for i in tf.range(1, max_iter):
-        η = η.write(index=i, value=kappa[:, i, :, :] * (1. - cumsum))
+        eta = eta.write(index=i, value=kappa[:, i, :, :] * (1. - cumsum))
         cumsum += kappa[:, i, :, :] * (1. - cumsum)
         next_cumsum += kappa[:, i + 1, :, :] * (1. - next_cumsum)
 
-    η = η.write(index=max_size - 1, value=kappa[:, max_size - 1, :, :] * (1. - cumsum))
-    return tf.transpose(η.stack(), perm=[1, 0, 2, 3])
+    eta = eta.write(index=max_size - 1, value=kappa[:, max_size - 1, :, :] * (1. - cumsum))
+    return tf.transpose(eta.stack(), perm=[1, 0, 2, 3])
 
 
 def generate_sample(sample_size: int, params, dist_type: str, temp, threshold: float = 0.99,
                     output_one_hot=False):
     chosen_dist = select_chosen_distribution(dist_type=dist_type, threshold=threshold,
                                              params=params, temp=temp, sample_size=sample_size)
-    categories_n = params[0].shape[1]
+    # categories_n = params[0].shape[1]
     chosen_dist.generate_sample()
     if output_one_hot:
-        vector = np.zeros(shape=(1, categories_n, sample_size, 1))
-        n_required = chosen_dist.psi.shape[1]
-        vector[:, :n_required, :, :] = chosen_dist.psi.numpy()
-        return vector
+        # vector = np.zeros(shape=(1, categories_n, sample_size, 1))
+        # n_required = chosen_dist.psi.shape[1]
+        # vector[:, :n_required, :, :] = chosen_dist.psi.numpy()
+        # return vector
+        return chosen_dist.psi.numpy()
     else:
         sample = np.argmax(chosen_dist.psi.numpy(), axis=1)[0, 0, 0]
         return sample

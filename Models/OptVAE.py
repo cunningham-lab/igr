@@ -3,7 +3,7 @@ from typing import Tuple
 import tensorflow as tf
 from os import environ as os_env
 from Utils.Distributions import IGR_I, IGR_Planar, IGR_SB, IGR_SB_Finite, GS, compute_log_exp_gs_dist
-from Utils.initializations import initialize_mu_and_xi_for_logistic
+from Utils.general import initialize_mu_and_xi_for_logistic
 os_env['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -20,7 +20,7 @@ class OptVAE:
         self.dataset_name = hyper['dataset_name']
 
         self.run_jv = hyper['run_jv']
-        self.γ = hyper['γ']
+        self.gamma = hyper['gamma']
         self.discrete_c = tf.constant(0.)
         self.continuous_c = tf.constant(0.)
 
@@ -84,7 +84,7 @@ class OptVAE:
                                                    run_closed_form_kl=run_closed_form_kl)
         kl = kl_norm + kl_dis
         loss = compute_loss(log_px_z=log_px_z, kl_norm=kl_norm, kl_dis=kl_dis,
-                            run_jv=run_jv, γ=self.γ,
+                            run_jv=run_jv, gamma=self.gamma,
                             discrete_c=self.discrete_c, continuous_c=self.continuous_c)
         output = (loss, tf.reduce_mean(log_px_z), tf.reduce_mean(kl),
                   tf.reduce_mean(kl_norm), tf.reduce_mean(kl_dis))
@@ -114,13 +114,12 @@ class OptVAE:
         with tf.GradientTape() as tape:
             tape.watch(params[0])
             _ = self.reparameterize(params)
+            # noinspection PyUnresolvedReferences
             psi = tf.math.softmax(self.dist.lam, axis=1)
         gradients = tape.gradient(target=psi, sources=params[0])
         gradients_norm = tf.linalg.norm(gradients, axis=1)
 
         return gradients_norm
-
-# ===========================================================================================================
 
 
 class OptExpGS(OptVAE):
@@ -146,7 +145,7 @@ class OptExpGS(OptVAE):
         mean, log_var, logits = params_broad
         z_norm, _ = z
         kl_norm = sample_kl_norm(z_norm=z_norm, mean=mean, log_var=log_var)
-        kl_dis = sample_kl_exp_gs(log_ψ=self.log_psi, log_π=logits, temp=self.temp)
+        kl_dis = sample_kl_exp_gs(log_psi=self.log_psi, log_pi=logits, temp=self.temp)
         return kl_norm, kl_dis
 
 
@@ -173,16 +172,13 @@ class OptExpGSDis(OptExpGS):
     @staticmethod
     def compute_kl_elements_via_closed_cat(params_broad):
         kl_norm = 0.
-        kl_dis = calculate_categorical_closed_kl(log_α=params_broad[0])
+        kl_dis = calculate_categorical_closed_kl(log_alpha=params_broad[0])
         return kl_norm, kl_dis
 
     def compute_kl_elements_via_sample(self, params_broad):
         kl_norm = 0.
-        kl_dis = sample_kl_exp_gs(log_ψ=self.log_psi, log_π=params_broad[0], temp=self.temp)
+        kl_dis = sample_kl_exp_gs(log_psi=self.log_psi, log_pi=params_broad[0], temp=self.temp)
         return kl_norm, kl_dis
-
-
-# ===========================================================================================================
 
 
 class OptIGR(OptVAE):
@@ -262,7 +258,7 @@ class OptPlanarNFDis(OptIGRDis):
                                temp=self.temp, sample_size=self.sample_size)
 
 
-class OptSBFinite(OptIGRDis):
+class OptSBFinite(OptIGR):
 
     def __init__(self, nets, optimizer, hyper, use_continuous):
         super().__init__(nets=nets, optimizer=optimizer, hyper=hyper)
@@ -281,7 +277,7 @@ class OptSBFinite(OptIGRDis):
         self.select_distribution(mu, xi)
         self.dist.generate_sample()
         self.n_required = self.dist.psi.shape[1]
-        z_discrete = self.dist.psi
+        z_discrete = self.complete_discrete_vector()
 
         z.append(z_discrete)
         return z
@@ -289,61 +285,8 @@ class OptSBFinite(OptIGRDis):
     def select_distribution(self, mu, xi):
         self.dist = IGR_SB_Finite(mu, xi, self.temp, self.sample_size)
 
-    def load_prior_values(self):
-        with open(file=self.prior_file, mode='rb') as f:
-            parameters = pickle.load(f)
-
-        mu_0 = tf.constant(parameters['mu'], dtype=tf.float32)
-        xi_0 = tf.constant(parameters['xi'], dtype=tf.float32)
-        categories_n = mu_0.shape[1]
-
-        self.mu_0 = shape_prior_to_sample_size_and_discrete_var_num(
-            prior_param=mu_0, batch_size=self.batch_size, categories_n=categories_n,
-            sample_size=self.sample_size, discrete_var_num=self.nets.disc_var_num)
-        self.xi_0 = shape_prior_to_sample_size_and_discrete_var_num(
-            prior_param=xi_0, batch_size=self.batch_size, categories_n=categories_n,
-            sample_size=self.sample_size, discrete_var_num=self.nets.disc_var_num)
-
-
-class OptSB(OptIGR):
-
-    def __init__(self, nets, optimizer, hyper, use_continuous):
-        super().__init__(nets=nets, optimizer=optimizer, hyper=hyper)
-        self.max_categories = hyper['latent_discrete_n']
-        self.threshold = hyper['threshold']
-        self.truncation_option = hyper['truncation_option']
-        self.prior_file = hyper['prior_file']
-        self.quantile = 50
-        self.use_continuous = use_continuous
-
-    def reparameterize(self, params_broad):
-        z = []
-        self.load_prior_values()
-        if self.use_continuous:
-            mean, log_var, mu, xi = params_broad
-            z_norm = sample_normal(mean=mean, log_var=log_var)
-            z.append(z_norm)
-        else:
-            mu, xi = params_broad
-        self.select_distribution(mu, xi)
-        self.dist.generate_sample()
-        self.n_required = self.dist.psi.shape[1]
-        z_discrete = self.complete_discrete_vector(psi=self.dist.psi)
-
-        z.append(z_discrete)
-        return z
-
-    def select_distribution(self, mu, xi):
-        self.dist = IGR_SB(mu, xi, sample_size=self.sample_size, temp=self.temp, threshold=self.threshold)
-        self.dist.truncation_option = self.truncation_option
-        self.dist.quantile = self.quantile
-
-    def complete_discrete_vector(self, psi):
-        batch_size, n_required = psi.shape[0], psi.shape[1]
-        missing = self.max_categories - n_required
-        zeros = tf.constant(value=0., dtype=tf.float32,
-                            shape=(batch_size, missing, self.sample_size, self.num_of_vars))
-        z_discrete = tf.concat([psi, zeros], axis=1)
+    def complete_discrete_vector(self):
+        z_discrete = self.dist.psi
         return z_discrete
 
     def load_prior_values(self):
@@ -361,16 +304,38 @@ class OptSB(OptIGR):
             prior_param=xi_0, batch_size=self.batch_size, categories_n=categories_n,
             sample_size=self.sample_size, discrete_var_num=self.nets.disc_var_num)
 
-# ===========================================================================================================
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
-# Additional functions
+
+class OptSB(OptSBFinite):
+
+    def __init__(self, nets, optimizer, hyper, use_continuous):
+        super().__init__(nets=nets, optimizer=optimizer, hyper=hyper, use_continuous=use_continuous)
+        self.max_categories = hyper['latent_discrete_n']
+        self.threshold = hyper['threshold']
+        self.truncation_option = hyper['truncation_option']
+        self.prior_file = hyper['prior_file']
+        self.quantile = 50
+        self.use_continuous = use_continuous
+
+    def select_distribution(self, mu, xi):
+        self.dist = IGR_SB(mu, xi, sample_size=self.sample_size, temp=self.temp, threshold=self.threshold)
+        self.dist.truncation_option = self.truncation_option
+        self.dist.quantile = self.quantile
+
+    def complete_discrete_vector(self):
+        batch_size, n_required = self.dist.psi.shape[0], self.dist.psi.shape[1]
+        missing = self.max_categories - n_required
+        zeros = tf.constant(value=0., dtype=tf.float32,
+                            shape=(batch_size, missing, self.sample_size, self.num_of_vars))
+        z_discrete = tf.concat([self.dist.psi, zeros], axis=1)
+        return z_discrete
+
+
 # ===========================================================================================================
 def compute_loss(log_px_z, kl_norm, kl_dis, run_jv=False,
-                 γ=tf.constant(1.), discrete_c=tf.constant(0.), continuous_c=tf.constant(0.)):
+                 gamma=tf.constant(1.), discrete_c=tf.constant(0.), continuous_c=tf.constant(0.)):
     if run_jv:
-        loss = -tf.reduce_mean(log_px_z - γ * tf.math.abs(kl_norm - continuous_c)
-                               - γ * tf.math.abs(kl_dis - discrete_c))
+        loss = -tf.reduce_mean(log_px_z - gamma * tf.math.abs(kl_norm - continuous_c)
+                               - gamma * tf.math.abs(kl_dis - discrete_c))
     else:
         kl = kl_norm + kl_dis
         elbo = tf.reduce_mean(log_px_z - kl)
@@ -379,9 +344,7 @@ def compute_loss(log_px_z, kl_norm, kl_dis, run_jv=False,
 
 
 def compute_log_bernoulli_pdf(x, x_logit):
-    batch_size, image_size, sample_size = x_logit.shape[0], x_logit.numpy().shape[1:4], x_logit.shape[4]
-    x_w_extra_col = tf.reshape(x, shape=(batch_size,) + image_size + (1,))
-    x_broad = tf.broadcast_to(x_w_extra_col, shape=(batch_size,) + image_size + (sample_size,))
+    x_broad = infer_shape_from(v=x_logit, x=x)
     cross_ent = -tf.nn.sigmoid_cross_entropy_with_logits(labels=x_broad, logits=x_logit)
     log_px_z = tf.reduce_sum(cross_ent, axis=[1, 2, 3])
     return log_px_z
@@ -393,18 +356,23 @@ def compute_log_gaussian_pdf(x, x_logit):
     xi = 1.e-6 + tf.math.softplus(xi)
     pi = 3.141592653589793
 
-    batch_size, image_size, sample_size = mu.shape[0], mu.numpy().shape[1:4], mu.shape[4]
-    x_w_extra_col = tf.reshape(x, shape=(batch_size,) + image_size + (1,))
-    x_broad = tf.broadcast_to(x_w_extra_col, shape=(batch_size,) + image_size + (sample_size,))
+    x_broad = infer_shape_from(v=mu, x=x)
 
     log_pixel = - 0.5 * ((x_broad - mu) / xi) ** 2. - 0.5 * tf.math.log(2 * pi) - tf.math.log(1.e-8 + xi)
     log_px_z = tf.reduce_sum(log_pixel, axis=[1, 2, 3])
     return log_px_z
 
 
+def infer_shape_from(v, x):
+    batch_size, image_size, sample_size = v.shape[0], v.numpy().shape[1:4], v.shape[4]
+    x_w_extra_col = tf.reshape(x, shape=(batch_size,) + image_size + (1,))
+    x_broad = tf.broadcast_to(x_w_extra_col, shape=(batch_size,) + image_size + (sample_size,))
+    return x_broad
+
+
 def sample_normal(mean, log_var):
-    ε = tf.random.normal(shape=mean.shape)
-    z_norm = mean + tf.math.exp(log_var * 0.5) * ε
+    epsilon = tf.random.normal(shape=mean.shape)
+    z_norm = mean + tf.math.exp(log_var * 0.5) * epsilon
     return z_norm
 
 
@@ -433,26 +401,26 @@ def calculate_general_closed_form_gauss_kl(mean_q, log_var_q, mean_p, log_var_p,
 
 
 def compute_log_normal_pdf(sample, mean, log_var):
-    π = 3.141592653589793
-    log2pi = -0.5 * tf.math.log(2 * π)
+    pi = 3.141592653589793
+    log2pi = -0.5 * tf.math.log(2 * pi)
     log_exp_sum = -0.5 * (sample - mean) ** 2 * tf.math.exp(-log_var)
     log_normal_pdf = tf.reduce_sum(log2pi + -0.5 * log_var + log_exp_sum, axis=1)
     return log_normal_pdf
 
 
-def calculate_categorical_closed_kl(log_α):
-    ς = 1.e-20
-    categories_n = tf.constant(log_α.shape[1], dtype=tf.float32)
+def calculate_categorical_closed_kl(log_alpha):
+    offset = 1.e-20
+    categories_n = tf.constant(log_alpha.shape[1], dtype=tf.float32)
     log_uniform_inv = tf.math.log(categories_n)
-    π = tf.math.softmax(log_α, axis=1)
-    kl_discrete = tf.reduce_sum(π * tf.math.log(π + ς), axis=1) + log_uniform_inv
+    pi = tf.math.softmax(log_alpha, axis=1)
+    kl_discrete = tf.reduce_sum(pi * tf.math.log(pi + offset), axis=1) + log_uniform_inv
     return kl_discrete
 
 
-def sample_kl_exp_gs(log_ψ, log_π, temp):
-    uniform_probs = get_broadcasted_uniform_probs(shape=log_ψ.shape)
-    log_pz = compute_log_exp_gs_dist(log_psi=log_ψ, logits=tf.math.log(uniform_probs), temp=temp)
-    log_qz_x = compute_log_exp_gs_dist(log_psi=log_ψ, logits=log_π, temp=temp)
+def sample_kl_exp_gs(log_psi, log_pi, temp):
+    uniform_probs = get_broadcasted_uniform_probs(shape=log_psi.shape)
+    log_pz = compute_log_exp_gs_dist(log_psi=log_psi, logits=tf.math.log(uniform_probs), temp=temp)
+    log_qz_x = compute_log_exp_gs_dist(log_psi=log_psi, logits=log_pi, temp=temp)
     kl_discrete = tf.math.reduce_sum(log_qz_x - log_pz, axis=2)
     return kl_discrete
 
@@ -461,9 +429,8 @@ def get_broadcasted_uniform_probs(shape):
     batch_n, categories_n, sample_size, disc_var_num = shape
     uniform_probs = tf.constant([1 / categories_n for _ in range(categories_n)], dtype=tf.float32,
                                 shape=(1, categories_n, 1, 1))
-    uniform_probs = tf.broadcast_to(uniform_probs, shape=(batch_n, categories_n, 1, 1))
-    uniform_probs = tf.broadcast_to(uniform_probs, shape=(batch_n, categories_n, sample_size, 1))
-    uniform_probs = tf.broadcast_to(uniform_probs, shape=(batch_n, categories_n, sample_size, disc_var_num))
+    uniform_probs = shape_prior_to_sample_size_and_discrete_var_num(uniform_probs, batch_n,
+                                                                    categories_n, sample_size, disc_var_num)
     return uniform_probs
 
 

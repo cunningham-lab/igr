@@ -29,7 +29,7 @@ class SOP(tf.keras.Model):
         x_upper_broad = brodcast_to_sample_size(x_upper, sample_size=sample_size)
         x_upper_broad = tf.reshape(x_upper_broad, shape=(batch_n * sample_size, width, height, rgb))
 
-        out = self.layer1(self.layer0(x_upper))
+        out = self.layer1(self.layer0(x_upper_broad))
         params_1 = tf.split(out, num_or_size_splits=self.split_sizes_list, axis=1)
         z_1 = self.sample_bernoulli(params_1, discretized=discretized)
 

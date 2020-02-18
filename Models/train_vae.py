@@ -8,12 +8,10 @@ from Models.OptVAE import OptVAE, OptIGR, OptSB, OptSBFinite, OptExpGS
 from Models.OptVAE import OptIGRDis, OptExpGSDis, OptPlanarNFDis, OptPlanarNF
 from Utils.viz_vae import plot_originals, plot_reconstructions_samples_and_traversals
 from Utils.general import setup_logger, append_timestamp_to_file
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
+
+
 # Train VAE
 # ===========================================================================================================
-
-
 def run_vae(hyper, run_with_sample):
     data = load_vae_dataset(dataset_name=hyper['dataset_name'], batch_n=hyper['batch_n'],
                             epochs=hyper['epochs'], run_with_sample=run_with_sample,
@@ -58,7 +56,7 @@ def construct_nets_and_optimizer(hyper, model_type):
 
 def train_vae(vae_opt, hyper, train_dataset, test_dataset, test_images, check_every, monitor_gradients=False):
     logger, results_path = start_all_logging_instruments(hyper=hyper, test_images=test_images)
-    init_vars = run_initialization_procedure(hyper, test_images, results_path)
+    init_vars = run_initialization_procedure(hyper, results_path)
     (hyper_file, iteration_counter, results_file, cont_c_linspace, disc_c_linspace, grad_monitor_dict,
      grad_norm) = init_vars
 
@@ -70,6 +68,7 @@ def train_vae(vae_opt, hyper, train_dataset, test_dataset, test_images, check_ev
             vae_opt, iteration_counter = perform_train_step(x_train, vae_opt, train_loss_mean,
                                                             iteration_counter, disc_c_linspace, cont_c_linspace)
         t1 = time.time()
+        # noinspection PyUnboundLocalVariable
         monitor_vanishing_grads(monitor_gradients, x_train, vae_opt,
                                 iteration_counter, grad_monitor_dict, epoch)
 
@@ -102,7 +101,7 @@ def log_all_hyperparameters(hyper, logger):
         logger.info(f'Hyper: {key}: {value}')
 
 
-def run_initialization_procedure(hyper, test_images, results_path):
+def run_initialization_procedure(hyper, results_path):
     init_vars = initialize_vae_variables(results_path=results_path, hyper=hyper)
     hyper_file, *_ = init_vars
 
@@ -212,4 +211,46 @@ def save_final_results(nets, logger, results_file, initial_time, temp):
     results_file = append_timestamp_to_file(file_name=results_file, termination='.h5')
     nets.save_weights(filepath=results_file)
 
-# ===========================================================================================================
+
+def run_vae_for_all_cases(hyper, model_cases, dataset_cases, temps, num_of_repetitions, run_with_sample):
+    for _, model in model_cases.items():
+        hyper_copy = dict(hyper)
+        hyper_copy = fill_in_dict(hyper_copy, model)
+        hyper_copy = fill_model_depending_settings(hyper_copy)
+        data_and_temps = add_data_and_temp_cases(dataset_cases, temps)
+
+        for _, d_and_t in data_and_temps.items():
+            hyper_copy = fill_in_dict(hyper_copy, d_and_t)
+            for rep in range(num_of_repetitions):
+                run_vae(hyper=hyper_copy, run_with_sample=run_with_sample)
+
+
+def fill_in_dict(hyper, cases):
+    for k, v in cases.items():
+        hyper[k] = v
+    return hyper
+
+
+def fill_model_depending_settings(hyper_copy):
+    hyper_copy['latent_discrete_n'] = hyper_copy['n_required']
+    if hyper_copy['model_type'].find('GS') >= 0:
+        hyper_copy['run_closed_form_kl'] = False
+        hyper_copy['num_of_discrete_param'] = 1
+    else:
+        hyper_copy['latent_discrete_n'] += 1
+        hyper_copy['run_closed_form_kl'] = True
+        hyper_copy['num_of_discrete_param'] = 2
+    return hyper_copy
+
+
+def add_data_and_temp_cases(dataset_cases, temps):
+    data_and_temp = {}
+    i = 0
+    for _, c in dataset_cases.items():
+        for t in temps:
+            i += 1
+            data_and_temp.update({i: {}})
+            c.update({'temp': t})
+            for key, val in c.items():
+                data_and_temp[i][key] = val
+    return data_and_temp

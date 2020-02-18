@@ -1,13 +1,13 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from Utils.posterior_sample_funcs import sample_from_posterior
+from Utils.posterior_sampling_funcs import sample_from_posterior
 import seaborn as sns
 import pandas as pd
 
 dataset_name = 'mnist'
 run_with_sample = False
-plots_path = './Results/Outputs/'
-path = './Results/Current_Model/' + dataset_name + '/'
+plots_path = './Results/'
+path = './Results/posterior_samples/' + dataset_name + '/'
 models = {
     1: {'model': 'igr_planar_cv', 'label': 'IGR-Planar(0.85)', 'type': 'IGR_Planar_Dis'},
     3: {'model': 'igr_sb_cv', 'label': 'IGR-SB(0.15)', 'type': 'IGR_SB_Finite_Dis'},
@@ -18,16 +18,16 @@ models = {
     # 6: {'model': 'igr_i_20', 'label': 'IGR-I(0.1)', 'type': 'IGR_I_Dis'},
     # 8: {'model': 'gs_20', 'label': 'GS(0.25)', 'type': 'GS_Dis'},
 }
+output = 0
 for key, val in models.items():
     dirs = path + val['model'] + '/'
     output = sample_from_posterior(path_to_results=dirs, hyper_file='hyper.pkl',
                                    dataset_name=dataset_name, weights_file='vae.h5',
                                    model_type=val['type'], run_with_sample=run_with_sample)
     models[key]['results'] = output
+    # noinspection PyTypeChecker
     models[key]['diff'] = np.median(np.mean(output, axis=2), axis=1)
 
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
 # Make boxplot
 # ===========================================================================================================
 plt.style.use(style='ggplot')
@@ -46,7 +46,6 @@ plt.ylabel('Euclidean Distance')
 # plt.ylim([0.0, 0.5])
 plt.xlabel('Models')
 plt.legend()
-plt.savefig('./Results/Outputs/posterior_samples_' + dataset_name + '.png')
+plt.savefig('./Results/posterior_samples_' + dataset_name + '.png')
 plt.tight_layout()
 plt.show()
-# ===========================================================================================================

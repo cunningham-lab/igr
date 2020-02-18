@@ -1,61 +1,53 @@
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
-# Imports
-# ===========================================================================================================
 import unittest
 import numpy as np
 import tensorflow as tf
-from Models.OptVAE import calculate_kl_norm_via_analytical_formula, calculate_categorical_closed_kl
-from Models.OptVAE import calculate_kl_norm_via_general_analytical_formula
-# ===========================================================================================================
+from Models.OptVAE import calculate_simple_closed_gauss_kl, calculate_categorical_closed_kl
+from Models.OptVAE import calculate_general_closed_form_gauss_kl
 
 
 class TestSBDist(unittest.TestCase):
 
     def test_calculate_kl_norm_via_analytical_formula(self):
         test_tolerance = 1.e-5
-        samples_n = 1
-        num_of_vars = 2
-        μ = broadcast_to_shape(np.array([[1., -1., 0.15, 0.45, -0.3],
-                                         [-0.1, 0.98, 0.02, -1.4, 0.35],
-                                         [0., 0., 2., 2., 0.]]), samples_n=samples_n, num_of_vars=num_of_vars)
-        log_σ2 = broadcast_to_shape(np.array(
+        cases = []
+        samples_n, num_of_vars = 1, 2
+        mu = broadcast_to_shape(np.array([[1., -1., 0.15, 0.45, -0.3],
+                                          [-0.1, 0.98, 0.02, -1.4, 0.35],
+                                          [0., 0., 2., 2., 0.]]), samples_n=samples_n, num_of_vars=num_of_vars)
+        log_sigma2 = broadcast_to_shape(np.array(
             [[-1.7261764, 0.1970883, -0.05951275, 0.43101027, 1.00751897],
              [-1.55425, -0.0337, 1.22609, -0.19088, 0.9577],
              [0., 0., 0., 0., 0.]]), samples_n=samples_n, num_of_vars=num_of_vars)
-        kl_norm_ans = calculate_kl_norm(μ=μ, σ2=np.exp(log_σ2))
-        kl_norm = calculate_kl_norm_via_analytical_formula(mean=tf.constant(μ, dtype=tf.float32),
-                                                           log_var=tf.constant(log_σ2, dtype=tf.float32))
-        relative_diff = np.linalg.norm((kl_norm.numpy() - kl_norm_ans) / kl_norm_ans)
-        self.assertTrue(expr=relative_diff < test_tolerance)
+        cases.append((mu, log_sigma2))
 
-        samples_n = 2
-        batch_n = 68
-        categories_n = 15
-        μ = broadcast_to_shape(np.random.normal(size=(batch_n, categories_n)),
-                               samples_n=samples_n, num_of_vars=num_of_vars)
-        log_σ2 = broadcast_to_shape(np.random.lognormal(size=(batch_n, categories_n)),
-                                    samples_n=samples_n, num_of_vars=num_of_vars)
-        kl_norm_ans = calculate_kl_norm(μ=μ, σ2=np.exp(log_σ2))
-        kl_norm = calculate_kl_norm_via_analytical_formula(mean=tf.constant(μ, dtype=tf.float32),
-                                                           log_var=tf.constant(log_σ2, dtype=tf.float32))
-        relative_diff = np.linalg.norm((kl_norm.numpy() - kl_norm_ans) / kl_norm_ans)
-        self.assertTrue(expr=relative_diff < test_tolerance)
+        samples_n, batch_n, categories_n = 2, 68, 15
+        mu = broadcast_to_shape(np.random.normal(size=(batch_n, categories_n)),
+                                samples_n=samples_n, num_of_vars=num_of_vars)
+        log_sigma2 = broadcast_to_shape(np.random.lognormal(size=(batch_n, categories_n)),
+                                        samples_n=samples_n, num_of_vars=num_of_vars)
+        cases.append((mu, log_sigma2))
+
+        for mu, log_sigma2 in cases:
+            kl_norm_ans = calculate_kl_norm(mu=mu, sigma2=np.exp(log_sigma2))
+            kl_norm = calculate_simple_closed_gauss_kl(mean=tf.constant(mu, dtype=tf.float32),
+                                                       log_var=tf.constant(log_sigma2, dtype=tf.float32))
+            relative_diff = np.linalg.norm((kl_norm.numpy() - kl_norm_ans) / kl_norm_ans)
+            self.assertTrue(expr=relative_diff < test_tolerance)
 
     def test_calculate_kl_gs_via_discrete_formula(self):
         test_tolerance = 1.e-5
         samples_n = 1
         num_of_vars = 1
-        log_α = broadcast_to_shape(np.array([[1., -1., 0.15, 0.45, -0.3],
-                                             [-0.1, 0.98, 0.02, -1.4, 0.35]]),
-                                   samples_n=samples_n, num_of_vars=num_of_vars)[:, :, :, 0]
-        kl_discrete_ans = calculate_kl_discrete(α=tf.math.softmax(log_α, axis=1))
-        kl_discrete = calculate_categorical_closed_kl(log_α=tf.constant(log_α, dtype=tf.float32))
+        log_alpha = broadcast_to_shape(np.array([[1., -1., 0.15, 0.45, -0.3],
+                                                 [-0.1, 0.98, 0.02, -1.4, 0.35]]),
+                                       samples_n=samples_n, num_of_vars=num_of_vars)[:, :, :, 0]
+        kl_discrete_ans = calculate_kl_discrete(alpha=tf.math.softmax(log_alpha, axis=1))
+        kl_discrete = calculate_categorical_closed_kl(log_alpha=tf.constant(log_alpha, dtype=tf.float32))
         relative_diff = np.linalg.norm((kl_discrete.numpy() - kl_discrete_ans) / kl_discrete_ans)
         self.assertTrue(expr=relative_diff < test_tolerance)
 
     def test_calculate_kl_norm_via_general_analytical_formula(self):
-        test_tolerance = 1.e-15
+        test_tolerance = 1.e-10
         samples_n = 1
         num_of_vars = 2
         mean_0 = broadcast_to_shape(np.array([[1., -1., 0.15, 0.45, -0.3],
@@ -76,19 +68,19 @@ class TestSBDist(unittest.TestCase):
                                        samples_n=samples_n, num_of_vars=num_of_vars)
         kl_norm_ans = calculate_kl_norm_general_from_vectors(mean_0=mean_0, log_var_0=log_var_0,
                                                              mean_1=mean_1, log_var_1=log_var_1)
-        kl_norm = calculate_kl_norm_via_general_analytical_formula(mean_0=mean_0, log_var_0=log_var_0,
-                                                                   mean_1=mean_1, log_var_1=log_var_1)
+        kl_norm = calculate_general_closed_form_gauss_kl(mean_q=mean_0, log_var_q=log_var_0,
+                                                         mean_p=mean_1, log_var_p=log_var_1)
         relative_diff = np.linalg.norm((kl_norm.numpy() - kl_norm_ans))
         self.assertTrue(expr=relative_diff < test_tolerance)
 
         self.assertTrue(expr=np.isclose(kl_norm.numpy()[-1, 0, 0], 0))
 
 
-def calculate_kl_norm(μ, σ2):
-    categories_n = μ.shape[1]
-    kl_norm = np.zeros(shape=μ.shape)
+def calculate_kl_norm(mu, sigma2):
+    categories_n = mu.shape[1]
+    kl_norm = np.zeros(shape=mu.shape)
     for i in range(categories_n):
-        kl_norm[:, i, :] = 0.5 * (σ2[:, i, :] + μ[:, i, :] ** 2 - np.log(σ2[:, i, :]) - 1)
+        kl_norm[:, i, :] = 0.5 * (sigma2[:, i, :] + mu[:, i, :] ** 2 - np.log(sigma2[:, i, :]) - 1)
     return np.sum(kl_norm, axis=1)
 
 
@@ -114,11 +106,11 @@ def calculate_kl_norm_general(mean_0, cov_0, mean_1, cov_1):
     return kl_norm
 
 
-def calculate_kl_discrete(α):
-    categories_n = α.shape[1]
-    kl_discrete = np.zeros(shape=α.shape)
+def calculate_kl_discrete(alpha):
+    categories_n = alpha.shape[1]
+    kl_discrete = np.zeros(shape=alpha.shape)
     for i in range(categories_n):
-        kl_discrete[:, i, :] = α[:, i, :] * (np.log(α[:, i, :]) - np.log(1 / categories_n))
+        kl_discrete[:, i, :] = alpha[:, i, :] * (np.log(alpha[:, i, :]) - np.log(1 / categories_n))
     return np.sum(kl_discrete, axis=1)
 
 
@@ -130,11 +122,5 @@ def broadcast_to_shape(v, samples_n, num_of_vars):
     return v
 
 
-# ===========================================================================================================
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ===========================================================================================================
-# If main block
-# ===========================================================================================================
 if __name__ == '__main__':
     unittest.main()
-# ===========================================================================================================

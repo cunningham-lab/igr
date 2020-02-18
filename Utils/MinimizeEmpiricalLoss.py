@@ -2,8 +2,8 @@ import time
 import numpy as np
 import tensorflow as tf
 from Utils.Distributions import compute_gradients, apply_gradients
-from Utils.initializations import initialize_mu_and_xi_for_logistic, initialize_mu_and_xi_equally
-from Utils.general import setup_logger
+from Utils.general import initialize_mu_and_xi_for_logistic, initialize_mu_and_xi_equally, setup_logger
+
 logger = setup_logger(log_file_name='./Log/discrete.log')
 
 
@@ -32,7 +32,7 @@ class MinimizeEmpiricalLoss:
         self.n_required_iter = np.zeros(shape=max_iterations)
         self.run_iteratively = False
 
-    def optimize_model(self, mean_p, var_p, probs, p_samples):
+    def optimize_model(self, probs):
         optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
         continue_training = True
         t0 = time.time()
@@ -86,7 +86,9 @@ def get_initial_params_for_model_type(model_type, shape):
                          shape=(batch_size, categories_n, 1, 1))
         pi_init = tf.constant(pi.numpy().copy(), dtype=tf.float32,
                               shape=(batch_size, categories_n, 1, 1))
+        # noinspection PyArgumentList
         params = [tf.Variable(initial_value=pi)]
+        # noinspection PyArgumentList
         params_init = [tf.Variable(initial_value=pi_init)]
     elif model_type in ['IGR_I', 'IGR_SB', 'IGR_SB_Finite']:
         shape_igr = (batch_size, categories_n - 1, sample_size, num_of_vars)

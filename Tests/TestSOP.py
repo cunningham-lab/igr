@@ -7,7 +7,7 @@ from Models.SOPOptimizer import SOPOptimizer
 from Models.SOPOptimizer import run_sop
 
 
-class TestSBDist(unittest.TestCase):
+class TestSOP(unittest.TestCase):
 
     def test_fwd_pass_connections_and_gradient(self):
         batch_size = 64
@@ -49,8 +49,7 @@ class TestSBDist(unittest.TestCase):
                  'batch_size': batch_n, 'learning_rate': 0.001,
                  'epochs': epochs, 'iter_per_epoch': 10, 'temp': tf.constant(0.1)}
         results_path = './Log/'
-        data = load_mnist_sop_data(batch_n=batch_n, epochs=epochs, run_with_sample=True)
-        train_dataset, test_dataset = data
+        data = load_mnist_sop_data(batch_n=batch_n, run_with_sample=True)
         run_sop(hyper=hyper, results_path=results_path, data=data)
         hyper['model_type'] = 'IGR_Planar'
         run_sop(hyper=hyper, results_path=results_path, data=data)

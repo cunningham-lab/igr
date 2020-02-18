@@ -24,7 +24,7 @@ class TestVAENet(unittest.TestCase):
         b_tf = tf.constant(b2, dtype=tf.float32)
         w_tf = tf.constant(w2, dtype=tf.float32)
 
-        pf = PlanarFlowLayer(units=latent_n)
+        pf = PlanarFlowLayer(units=latent_n, var_num=1)
         pf.build(input_shape=example.shape)
         pf.w = w_tf
         pf.u = u_tf
@@ -44,7 +44,7 @@ class TestVAENet(unittest.TestCase):
         var_num = 2
         shape = (batch_n, latent_n, sample_size, var_num)
         eps = tf.random.normal(shape=shape)
-        pf = PlanarFlowLayer(units=latent_n)
+        pf = PlanarFlowLayer(units=latent_n, var_num=1)
         pf.build(input_shape=shape)
 
         with tf.GradientTape() as tape:
@@ -61,9 +61,9 @@ class TestVAENet(unittest.TestCase):
         shape = (batch_n, latent_n, sample_size, var_num)
         eps = tf.random.normal(shape=shape)
         pf = tf.keras.Sequential([
-            PlanarFlowLayer(units=latent_n),
-            PlanarFlowLayer(units=latent_n),
-            PlanarFlowLayer(units=latent_n)])
+            PlanarFlowLayer(units=latent_n, var_num=1),
+            PlanarFlowLayer(units=latent_n, var_num=1),
+            PlanarFlowLayer(units=latent_n, var_num=1)])
 
         with tf.GradientTape() as tape:
             output = pf(eps)
@@ -78,12 +78,12 @@ def compute_pf(inputs, w, u, b):
     for batch in range(batch_n):
         for sample in range(sample_size):
             for var in range(var_num):
-                output[batch, :, sample, var] = pf(z=inputs[batch, :, sample, var], w=w[:, var],
-                                                   u=u[:, var], b=b[var])
+                output[batch, :, sample, var] = planar_flow(z=inputs[batch, :, sample, var], w=w[:, var],
+                                                            u=u[:, var], b=b[var])
     return output
 
 
-def pf(z, w, u, b):
+def planar_flow(z, w, u, b):
     alpha = -1 + np.log(1 + np.exp(np.dot(w, u))) - np.dot(w, u)
     u_tilde = u + alpha * w / np.linalg.norm(w)
     tanh = np.tanh(np.dot(w, z) + b)
