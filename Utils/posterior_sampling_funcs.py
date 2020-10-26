@@ -6,15 +6,14 @@ from Utils.Distributions import IGR_I, GS, IGR_SB_Finite, IGR_Planar
 from Utils.load_data import load_vae_dataset
 
 
-# Posterior Sampling Funcs
-#  ====================================================================================================================
 def sample_from_posterior(path_to_results, hyper_file, dataset_name, weights_file,
                           model_type, run_with_sample=True):
     with open(file=path_to_results + hyper_file, mode='rb') as f:
         hyper = pickle.load(f)
 
     data = load_vae_dataset(dataset_name=dataset_name, batch_n=hyper['batch_n'], epochs=hyper['epochs'],
-                            run_with_sample=run_with_sample, architecture=hyper['architecture'], hyper=hyper)
+                            run_with_sample=run_with_sample,
+                            architecture=hyper['architecture'], hyper=hyper)
     train_dataset, test_dataset, np_test_images, hyper = data
 
     vae_opt = construct_nets_and_optimizer(hyper=hyper, model_type=model_type)

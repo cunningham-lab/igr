@@ -15,12 +15,12 @@ def plot_reconstructions_samples_and_traversals(hyper, epoch, results_path, test
             cont_dim_n=hyper['latent_norm_n'], traversal_n=12,
             plots_path=results_path + f'/sample_{epoch}_')
 
-    plot_grid_of_random_cont_samples_along_all_disc_dim(
-        model=model, samples_n=12,
-        cont_dim_n=hyper['latent_norm_n'],
-        discrete_dim_n=hyper['latent_discrete_n'] * hyper['num_of_discrete_var'],
-        plots_path=results_path + f'/sample_{epoch}_',
-        total_discrete_n_to_traverse=vae_opt.n_required)
+    # plot_grid_of_random_cont_samples_along_all_disc_dim(
+    #     model=model, samples_n=12,
+    #     cont_dim_n=hyper['latent_norm_n'],
+    #     discrete_dim_n=hyper['latent_discrete_n'] * hyper['num_of_discrete_var'],
+    #     plots_path=results_path + f'/sample_{epoch}_',
+    #     total_discrete_n_to_traverse=vae_opt.n_required)
 
     _, x_logit, *_ = vae_opt.perform_fwd_pass(x=test_images.astype(np.float32))
     if hyper['dataset_name'] == 'celeb_a' or hyper['dataset_name'] == 'fmnist':
@@ -40,6 +40,7 @@ def plot_originals(test_images, results_path):
     plt.figure(figsize=(5, 4), dpi=100)
     for i in range(test_images.shape[0]):
         plt.subplot(5, 4, i + 1)
+        test_images = test_images.astype('float32')
         plot_based_on_color_or_black(recon_image=test_images[i, :, :])
         plt.axis('off')
     plt.savefig(results_path + f'/Reconstruction.png')

@@ -10,7 +10,8 @@ logger = setup_logger(log_file_name='./Log/discrete.log')
 class MinimizeEmpiricalLoss:
 
     def __init__(self, params, learning_rate, temp, sample_size=int(1.e3), max_iterations=int(1.e4),
-                 run_kl=True, tolerance=1.e-5, model_type='IGR_I', threshold=0.9):
+                 run_kl=True, tolerance=1.e-5, model_type='IGR_I', threshold=0.9,
+                 planar_flow=None):
 
         self.params = params
         self.learning_rate = learning_rate
@@ -21,6 +22,7 @@ class MinimizeEmpiricalLoss:
         self.tolerance = tolerance
         self.model_type = model_type
         self.threshold = threshold
+        self.planar_flow = planar_flow
 
         self.iteration = 0
         self.training_time = 0
@@ -33,12 +35,14 @@ class MinimizeEmpiricalLoss:
         self.run_iteratively = False
 
     def optimize_model(self, probs):
+        # optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate, decay=1.e-2)
         optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
         continue_training = True
         t0 = time.time()
         while continue_training:
             current_iter_time = time.time()
-            loss, n_required = self.take_gradient_step_and_compute_loss(optimizer=optimizer, probs=probs)
+            loss, n_required = self.take_gradient_step_and_compute_loss(
+                optimizer=optimizer, probs=probs)
             self.iter_time += time.time() - current_iter_time
 
             self.loss_iter[self.iteration] = loss.numpy()
@@ -53,15 +57,18 @@ class MinimizeEmpiricalLoss:
     def take_gradient_step_and_compute_loss(self, optimizer, probs):
         grad, loss, n_required = compute_gradients(params=self.params, temp=self.temp,
                                                    probs=probs, dist_type=self.model_type,
-                                                   sample_size=self.sample_size, threshold=self.threshold,
+                                                   sample_size=self.sample_size,
+                                                   threshold=self.threshold,
                                                    run_iteratively=self.run_iteratively,
-                                                   run_kl=self.run_kl)
+                                                   run_kl=self.run_kl,
+                                                   planar_flow=self.planar_flow)
         apply_gradients(optimizer=optimizer, gradients=grad, variables=self.params)
         return loss, n_required
 
     def evaluate_progress(self, loss_iter, n_required_iter):
         if (self.iteration % self.check_every == 0) & (self.iteration > self.check_every):
-            self.check_mean_loss_to_previous_iterations(loss_iter=loss_iter, n_required_iter=n_required_iter)
+            self.check_mean_loss_to_previous_iterations(loss_iter=loss_iter,
+                                                        n_required_iter=n_required_iter)
 
             logger.info(f'Iter {self.iteration:4d} || '
                         f'Loss {self.mean_loss:2.3e} || '
@@ -90,10 +97,11 @@ def get_initial_params_for_model_type(model_type, shape):
         params = [tf.Variable(initial_value=pi)]
         # noinspection PyArgumentList
         params_init = [tf.Variable(initial_value=pi_init)]
-    elif model_type in ['IGR_I', 'IGR_SB', 'IGR_SB_Finite']:
+    elif model_type in ['IGR_I', 'IGR_SB', 'IGR_SB_Finite', 'IGR_Planar']:
         shape_igr = (batch_size, categories_n - 1, sample_size, num_of_vars)
-        if model_type == 'IGR_I':
+        if model_type in ['IGR_I', 'IGR_Planar']:
             mu, xi = initialize_mu_and_xi_equally(shape_igr)
+            # mu, xi = initialize_mu_and_xi_equally(shape_igr, value_mean=-0.55, value_xi=-0.26)
         else:
             mu, xi = initialize_mu_and_xi_for_logistic(shape_igr, seed=21)
         params_init = [tf.constant(mu.numpy().copy()), tf.constant(xi.numpy().copy())]
